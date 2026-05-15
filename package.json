@@ -1,0 +1,51 @@
+{
+  "name": "mode7b",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mode-7-style procedural road tech demo (Three.js + Vite + Tauri 2).",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "typecheck": "tsc --noEmit --pretty",
+    "lint": "eslint .",
+    "format": "prettier -w .",
+    "format:check": "prettier -c .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm build",
+    "snapshot": "tsx scripts/snapshot.ts",
+    "introspect": "tsx scripts/introspect.ts",
+    "perf": "tsx scripts/perf.ts",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "dependencies": {
+    "alea": "^1.0.1",
+    "lil-gui": "^0.21.0",
+    "simplex-noise": "^4.0.3",
+    "three": "^0.184.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/cli": "^2.11.1",
+    "@types/node": "^24.0.0",
+    "@types/three": "^0.184.1",
+    "eslint": "^10.3.0",
+    "playwright": "^1.59.1",
+    "prettier": "^3.8.3",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.2",
+    "vite": "^8.0.11",
+    "vitest": "^4.1.5"
+  },
+  "volta": {
+    "node": "24.14.0",
+    "pnpm": "10.33.2"
+  },
+  "packageManager": "pnpm@10.33.2"
+}

@@ -1,0 +1,46 @@
+---
+description: Core invariants of the mode7b renderer. Always attached.
+alwaysApply: true
+---
+
+# mode7b — renderer intent
+
+The road moves around the player; the player stays at world origin (X=0, Z=0).
+Player Y is the depth map sample at their `(distance, 0)` position. The thing
+called "distance" everywhere is literally the player's fractional row index.
+
+Bend semantics: `bend[i]` is a per-row signed slope on the segment between row
+`i-1` and row `i`. The X offset of any row equals the integral of slope from
+the player's row to that row. With an exclusive prefix sum `P` over a window
+of bends and `lo = floor(playerRow)`, `frac = playerRow - lo`:
+
+```
+offset(row) = P[row+1] - P[lo+1] - frac * bends[lo+1]
+```
+
+**Visual presentation invariant:** what gets rendered is the
+**tangent-aligned** view of those cumulative offsets. At the player's
+position both the offset AND the local slope of the road are zero, every
+frame. The road never appears to tilt under the player; curvature shows up
+only further up and down the track. This is achieved by translating each
+row's X coordinate by an extra `−s · (row − playerRow)` term (no rotation
+of the mesh, camera, or player). See `rowOffsetTangentAligned` /
+`rebuildOffsetsTangentAligned` in `bendMath.ts`. The terrain mesh always
+uses the tangent-aligned variant; the raw cumulative functions are kept for
+tests and for reasoning about the world's true geometry.
+
+Single source of truth: [`src/render/bendMath.ts`](mdc:src/render/bendMath.ts).
+Tests: [`tests/bendMath.spec.ts`](mdc:tests/bendMath.spec.ts).
+
+When you modify `bendMath.ts`:
+1. Load the `mode7-bend-math` skill.
+2. Update or add a unit test before changing the formula.
+3. Capture a snapshot diff with `pnpm snapshot --seed mode7 --distance 120`
+   before and after.
+
+When you modify anything in `src/render/` other than the math:
+- Load the `mode7-introspect` skill and run `pnpm snapshot` against a fixed
+  seed both before and after. Visual changes without a recorded snapshot are
+  not reviewable.
+
+Verification gate: `pnpm verify` must exit clean before any task is "done".

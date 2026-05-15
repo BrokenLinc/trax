@@ -1,0 +1,8 @@
+node_modules
+dist
+artifacts
+coverage
+src-tauri/target
+src-tauri/gen
+pnpm-lock.yaml
+*.tsbuildinfo
