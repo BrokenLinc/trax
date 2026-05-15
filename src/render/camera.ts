@@ -14,13 +14,22 @@ export interface ChaseCameraParams {
 }
 
 export const DEFAULT_CAMERA: ChaseCameraParams = {
-  height: 2.4,
-  back: 5.5,
+  // `height` clears the player sphere (radius 0.5 in DEFAULT_PLAYER_MESH),
+  // `back` leaves breathing room behind it.
+  height: 2.6,
+  back: 6.5,
   lookAhead: 8,
   fov: 60,
   near: 0.1,
   far: 200,
 };
+
+/**
+ * Vertical offset from the ground sample to the player sphere's centre.
+ * Mirrors `DEFAULT_PLAYER_MESH.radius` in `playerMesh.ts`; the chase camera
+ * uses it to raise its look-at target onto the sphere rather than the road.
+ */
+const SPHERE_CENTRE_OFFSET = 0.5;
 
 /**
  * The "chase" camera is a misnomer — the player stays at the world origin,
@@ -56,7 +65,7 @@ export class ChaseCamera {
   update(playerY: number): void {
     const p = this.params;
     this.camera.position.set(0, playerY + p.height, p.back);
-    this.target.set(0, playerY + p.height * 0.4, -p.lookAhead);
+    this.target.set(0, playerY + SPHERE_CENTRE_OFFSET + p.height * 0.25, -p.lookAhead);
     this.camera.lookAt(this.target);
   }
 }

@@ -5,6 +5,7 @@ import { World } from './world/world.ts';
 import { ChaseCamera } from './render/camera.ts';
 import { createScene } from './render/scene.ts';
 import { TerrainMesh, type TerrainSnapshot } from './render/terrainMesh.ts';
+import { PlayerMesh } from './render/playerMesh.ts';
 import { DebugDraw } from './render/debugDraw.ts';
 import { PlayerController } from './player/controller.ts';
 import { createPlayerState, type PlayerState } from './player/state.ts';
@@ -36,6 +37,7 @@ export class App {
   private readonly camera: ChaseCamera;
   private readonly scene: THREE.Scene;
   private readonly terrain: TerrainMesh;
+  private readonly playerMesh: PlayerMesh;
   private readonly debugDraw: DebugDraw;
   private readonly controller: PlayerController;
   private readonly player: PlayerState;
@@ -73,6 +75,9 @@ export class App {
     this.world = new World(opts.seed);
     this.terrain = new TerrainMesh(this.world);
     this.scene.add(this.terrain.mesh);
+
+    this.playerMesh = new PlayerMesh();
+    this.scene.add(this.playerMesh.mesh);
 
     this.debugDraw = new DebugDraw(this.terrain.getRowCount());
     this.scene.add(this.debugDraw.group);
@@ -143,6 +148,7 @@ export class App {
     this.hud?.destroy();
     this.gui?.destroy();
     this.topdown.destroy();
+    this.playerMesh.dispose();
     this.terrain.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
@@ -243,6 +249,7 @@ export class App {
     if (dt > 0) this.controller.update(this.player, dt);
     this.player.y = this.world.depth.sampleBilinear(this.player.distance, 0);
     this.terrain.update(this.player.distance);
+    this.playerMesh.update(this.player.distance, this.world);
     this.debugDraw.updateCentreLine(
       this.terrain.snapshot().offsets,
       this.terrain.getParams().rowSpacing,

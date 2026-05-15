@@ -36,21 +36,24 @@ export function buildGui(opts: {
     .name('topdown world-space')
     .onChange((v: boolean) => opts.onTopdownWorldSpace(v));
 
+  // Slider ranges are biased toward the smooth aesthetic of DEFAULT_*_PARAMS;
+  // headroom is preserved at the upper end for users who want to crank up the
+  // turbulence on purpose.
   const depth = gui.addFolder('depth map');
   const dp = opts.world.depth.getParams();
-  depth.add(dp, 'frequency', 0.005, 0.2, 0.001).onChange(() => opts.world.depth.setParams(dp));
-  depth.add(dp, 'amplitude', 0, 5, 0.05).onChange(() => opts.world.depth.setParams(dp));
-  depth.add(dp, 'octaves', 1, 6, 1).onChange(() => opts.world.depth.setParams(dp));
+  depth.add(dp, 'frequency', 0.002, 0.06, 0.001).onChange(() => opts.world.depth.setParams(dp));
+  depth.add(dp, 'amplitude', 0, 3, 0.05).onChange(() => opts.world.depth.setParams(dp));
+  depth.add(dp, 'octaves', 1, 5, 1).onChange(() => opts.world.depth.setParams(dp));
   depth.add(dp, 'lacunarity', 1.5, 3, 0.05).onChange(() => opts.world.depth.setParams(dp));
-  depth.add(dp, 'gain', 0.2, 0.8, 0.01).onChange(() => opts.world.depth.setParams(dp));
+  depth.add(dp, 'gain', 0.2, 0.6, 0.01).onChange(() => opts.world.depth.setParams(dp));
   depth.add(dp, 'roadFlatColumns', 0, 16, 1).onChange(() => opts.world.depth.setParams(dp));
   depth.add(dp, 'roadFlatStrength', 0, 1, 0.01).onChange(() => opts.world.depth.setParams(dp));
 
   const bend = gui.addFolder('bend field');
   const bp = opts.world.bend.getParams();
-  bend.add(bp, 'frequency', 0.001, 0.1, 0.001).onChange(() => opts.world.bend.setParams(bp));
-  bend.add(bp, 'amplitude', 0, 2, 0.01).onChange(() => opts.world.bend.setParams(bp));
-  bend.add(bp, 'detailWeight', 0, 1, 0.01).onChange(() => opts.world.bend.setParams(bp));
+  bend.add(bp, 'frequency', 0.001, 0.03, 0.001).onChange(() => opts.world.bend.setParams(bp));
+  bend.add(bp, 'amplitude', 0, 1, 0.01).onChange(() => opts.world.bend.setParams(bp));
+  bend.add(bp, 'detailWeight', 0, 0.5, 0.01).onChange(() => opts.world.bend.setParams(bp));
   bend.add(bp, 'detailFrequency', 0.005, 0.3, 0.005).onChange(() => opts.world.bend.setParams(bp));
 
   return gui;

@@ -22,11 +22,13 @@ export interface DepthMapParams {
 }
 
 export const DEFAULT_DEPTH_PARAMS: DepthMapParams = {
-  frequency: 0.04,
-  amplitude: 1.5,
-  octaves: 4,
-  lacunarity: 2.1,
-  gain: 0.5,
+  // Broader, gentler hills: lower frequency stretches features, fewer octaves
+  // and lower gain strip out the high-frequency crinkles.
+  frequency: 0.012,
+  amplitude: 1.2,
+  octaves: 3,
+  lacunarity: 2.0,
+  gain: 0.4,
   roadFlatColumns: 5,
   roadFlatStrength: 0.85,
 };

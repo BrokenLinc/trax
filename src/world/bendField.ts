@@ -18,9 +18,11 @@ export interface BendFieldParams {
 }
 
 export const DEFAULT_BEND_PARAMS: BendFieldParams = {
-  frequency: 0.015,
-  amplitude: 0.6,
-  detailWeight: 0.15,
+  // Longer sweeping curves with a small amplitude — gentle winding rather
+  // than switchbacks. Per-row slope is the dominant turbulence knob.
+  frequency: 0.006,
+  amplitude: 0.18,
+  detailWeight: 0.05,
   detailFrequency: 0.08,
 };
 
