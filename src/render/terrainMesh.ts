@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import type { World } from '../world/world.ts';
 import { prefixSum, rebuildOffsetsTangentAligned } from './bendMath.ts';
+import { ChunkStreamer } from './chunkStreamer.ts';
+import { WorldFrame } from './worldFrame.ts';
 
 export interface TerrainParams {
   /** How many integer rows visible ahead of the player. */
@@ -16,6 +18,13 @@ export interface TerrainParams {
   rowSpacing: number;
   /** World units between adjacent columns (X axis). */
   colSpacing: number;
+  /**
+   * Number of row-intervals per static chunk. A chunk holds
+   * `rowsPerChunk + 1` rows of vertices and is baked once when it enters
+   * the streamer's range. Smaller → more chunks loaded, less work per
+   * chunk bake. Larger → fewer chunks, bigger one-time bakes on crossings.
+   */
+  rowsPerChunk: number;
 }
 
 export const DEFAULT_TERRAIN: TerrainParams = {
@@ -24,54 +33,51 @@ export const DEFAULT_TERRAIN: TerrainParams = {
   cols: 33,
   rowSpacing: 1.0,
   colSpacing: 0.6,
+  rowsPerChunk: 32,
 };
 
+export interface TerrainSnapshot {
+  rowCount: number;
+  cols: number;
+  bends: number[];
+  prefix: number[];
+  offsets: number[];
+}
+
 /**
- * The visible mesh is a fixed-topology (rows × cols) grid whose vertex
- * positions are repacked every frame from a sliding window of the world.
- * This avoids reallocating buffers and keeps the GPU upload predictable.
+ * The renderer-side facade over the static-chunk pipeline. It owns
  *
- * Per-vertex coordinates:
- *   X = (col - centreCol) · colSpacing  +  rowOffset
- *   Y = world.depth.sample(absoluteRow, signedCol)
- *   Z = -(absoluteRow - playerRow) · rowSpacing       (forward = −Z)
+ *  · a `ChunkStreamer` that bakes/evicts static `BakedChunk` meshes,
+ *  · a `WorldFrame` that rewrites the worldRoot matrix each frame, and
+ *  · a small rolling bend window for the inspector / `debugDraw` centre
+ *    line — the same surface the legacy CPU-rebuild renderer exposed.
+ *
+ * Per-frame cost: ~150 bend samples (for the debug window) + one
+ * `Matrix4.multiplyMatrices`. The heavy depth-FBM sampling is amortised
+ * across chunk bakes; rows that the player will revisit produce zero
+ * extra work because the chunk's vertex buffer is already populated.
  */
 export class TerrainMesh {
-  readonly mesh: THREE.Mesh;
-  readonly geometry: THREE.BufferGeometry;
+  /** Scene-graph attachment point. Added to the scene by `app.ts`. */
+  readonly mesh: THREE.Group;
+  private readonly worldFrame: WorldFrame;
+  private readonly streamer: ChunkStreamer;
   private readonly material: THREE.MeshStandardMaterial;
   private readonly wireMaterial: THREE.MeshBasicMaterial;
-  private readonly position: THREE.BufferAttribute;
-  private readonly normal: THREE.BufferAttribute;
   private readonly bends: Float32Array;
   private readonly prefix: Float32Array;
   private readonly offsets: Float32Array;
   private params: TerrainParams;
-  private centreCol: number;
   private rowCount: number;
+  private windowRowStart = 0;
   private wireframe = false;
+  private world: World;
+  private readonly savedMatrix = new THREE.Matrix4();
 
-  constructor(
-    private world: World,
-    params: TerrainParams = DEFAULT_TERRAIN,
-  ) {
+  constructor(world: World, params: TerrainParams = DEFAULT_TERRAIN) {
+    this.world = world;
     this.params = sanitiseParams(params);
     this.rowCount = this.params.rowsAhead + this.params.rowsBehind + 1;
-    this.centreCol = Math.floor(this.params.cols / 2);
-
-    const vertCount = this.rowCount * this.params.cols;
-    const positions = new Float32Array(vertCount * 3);
-    const normals = new Float32Array(vertCount * 3);
-    const indices = buildIndices(this.rowCount, this.params.cols);
-
-    this.geometry = new THREE.BufferGeometry();
-    this.position = new THREE.BufferAttribute(positions, 3);
-    this.position.setUsage(THREE.DynamicDrawUsage);
-    this.normal = new THREE.BufferAttribute(normals, 3);
-    this.normal.setUsage(THREE.DynamicDrawUsage);
-    this.geometry.setAttribute('position', this.position);
-    this.geometry.setAttribute('normal', this.normal);
-    this.geometry.setIndex(new THREE.BufferAttribute(indices, 1));
 
     this.material = new THREE.MeshStandardMaterial({
       color: 0x8aa0d6,
@@ -87,8 +93,22 @@ export class TerrainMesh {
       opacity: 0.6,
     });
 
-    this.mesh = new THREE.Mesh(this.geometry, this.material);
-    this.mesh.frustumCulled = false;
+    this.streamer = new ChunkStreamer(
+      world,
+      {
+        rowsPerChunk: this.params.rowsPerChunk,
+        cols: this.params.cols,
+        rowSpacing: this.params.rowSpacing,
+        colSpacing: this.params.colSpacing,
+        rowsAhead: this.params.rowsAhead,
+        rowsBehind: this.params.rowsBehind,
+      },
+      { main: this.material, wireframe: this.wireMaterial },
+    );
+    this.worldFrame = new WorldFrame(this.streamer, {
+      rowSpacing: this.params.rowSpacing,
+    });
+    this.mesh = this.worldFrame.worldRoot;
 
     this.bends = new Float32Array(this.rowCount);
     this.prefix = new Float32Array(this.rowCount + 1);
@@ -106,7 +126,7 @@ export class TerrainMesh {
   setWireframe(on: boolean): void {
     if (on === this.wireframe) return;
     this.wireframe = on;
-    this.mesh.material = on ? this.wireMaterial : this.material;
+    this.streamer.setWireframe(on);
   }
 
   isWireframe(): boolean {
@@ -115,59 +135,63 @@ export class TerrainMesh {
 
   setWorld(world: World): void {
     this.world = world;
+    this.streamer.setWorld(world);
+  }
+
+  /** Debug toggle: when on, the worldRoot matrix omits the X-from-Z shear. */
+  setUnskewed(on: boolean): void {
+    this.worldFrame.setUnskewed(on);
+  }
+
+  isUnskewed(): boolean {
+    return this.worldFrame.isUnskewed();
   }
 
   /**
-   * Rebuild the mesh's position and normal attributes for the current
-   * `playerRow`. Cheap: O(rows · cols) per frame, no allocations.
+   * Temporarily switch the worldRoot matrix to its translate-only (unskewed)
+   * form. Pair with `popUnskewedView()` after rendering. Used by the
+   * top-down debug view so it can show the road's true world-space
+   * curvature without disturbing the main render.
+   */
+  pushUnskewedView(playerRow: number): void {
+    this.savedMatrix.copy(this.mesh.matrix);
+    this.worldFrame.setUnskewed(true);
+    this.worldFrame.refreshMatrix(playerRow);
+  }
+
+  popUnskewedView(): void {
+    this.worldFrame.setUnskewed(false);
+    this.mesh.matrix.copy(this.savedMatrix);
+    this.mesh.matrixWorldNeedsUpdate = true;
+  }
+
+  /**
+   * Drive one frame: streamer + matrix update, plus refresh the small bend
+   * window that feeds `snapshot()` and the debug centre line. The bend
+   * window is independent of the chunk geometry and is much cheaper to
+   * rebuild than the legacy per-vertex pass.
    */
   update(playerRow: number): void {
-    const { rowsBehind, cols, rowSpacing, colSpacing } = this.params;
-    const windowRowStart = Math.floor(playerRow) - rowsBehind;
-    // Refresh the bend window from the world (cheap, deterministic).
+    this.worldFrame.update(playerRow);
+    this.windowRowStart = Math.floor(playerRow) - this.params.rowsBehind;
     for (let i = 0; i < this.rowCount; i++) {
-      this.bends[i] = this.world.bend.sample(windowRowStart + i);
+      this.bends[i] = this.world.bend.sample(this.windowRowStart + i);
     }
     prefixSum(this.bends, this.prefix);
-    // Tangent-aligned: the rendered road has zero offset AND zero local slope
-    // at the player, so they never appear to sit on a tilted track. See
-    // src/render/bendMath.ts for the math.
     rebuildOffsetsTangentAligned(
-      windowRowStart,
+      this.windowRowStart,
       this.rowCount,
       playerRow,
       this.bends,
       this.prefix,
       this.offsets,
     );
-
-    const positions = this.position.array as Float32Array;
-    for (let r = 0; r < this.rowCount; r++) {
-      const absRow = windowRowStart + r;
-      const z = -(absRow - playerRow) * rowSpacing;
-      const xOffset = this.offsets[r] ?? 0;
-      const rowBase = r * cols * 3;
-      for (let c = 0; c < cols; c++) {
-        const signedCol = c - this.centreCol;
-        const x = signedCol * colSpacing + xOffset;
-        const y = this.world.depth.sample(absRow, signedCol);
-        const idx = rowBase + c * 3;
-        positions[idx] = x;
-        positions[idx + 1] = y;
-        positions[idx + 2] = z;
-      }
-    }
-    this.position.needsUpdate = true;
-    // Flat shading: derive normals from the geometry's triangles.
-    this.geometry.computeVertexNormals();
   }
 
-  /** Returns the integer row of the window's first vertex row. */
   getWindowRowStart(playerRow: number): number {
     return Math.floor(playerRow) - this.params.rowsBehind;
   }
 
-  /** Snapshot the current window (no recomputation) for introspection. */
   snapshot(): TerrainSnapshot {
     return {
       rowCount: this.rowCount,
@@ -179,42 +203,14 @@ export class TerrainMesh {
   }
 
   dispose(): void {
-    this.geometry.dispose();
+    this.streamer.dispose();
     this.material.dispose();
     this.wireMaterial.dispose();
   }
 }
 
-export interface TerrainSnapshot {
-  rowCount: number;
-  cols: number;
-  bends: number[];
-  prefix: number[];
-  offsets: number[];
-}
-
 function sanitiseParams(p: TerrainParams): TerrainParams {
   const cols = p.cols % 2 === 0 ? p.cols + 1 : p.cols;
-  return { ...p, cols };
-}
-
-function buildIndices(rows: number, cols: number): Uint32Array {
-  const quads = (rows - 1) * (cols - 1);
-  const out = new Uint32Array(quads * 6);
-  let w = 0;
-  for (let r = 0; r < rows - 1; r++) {
-    for (let c = 0; c < cols - 1; c++) {
-      const a = r * cols + c;
-      const b = a + 1;
-      const cc = a + cols;
-      const d = cc + 1;
-      out[w++] = a;
-      out[w++] = cc;
-      out[w++] = b;
-      out[w++] = b;
-      out[w++] = cc;
-      out[w++] = d;
-    }
-  }
-  return out;
+  const rowsPerChunk = Math.max(1, Math.floor(p.rowsPerChunk));
+  return { ...p, cols, rowsPerChunk };
 }

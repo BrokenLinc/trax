@@ -90,6 +90,55 @@ export function rebuildOffsets(
 }
 
 /**
+ * Cumulative bend integral from `windowRowStart` to (possibly fractional)
+ * `row`. With `bends[i]` the slope on `[windowRowStart + i − 1, windowRowStart + i)`
+ * and `prefix` its exclusive prefix sum:
+ *
+ *   Φ(windowRowStart)               = 0
+ *   Φ(windowRowStart + k)           = prefix[k + 1] − prefix[1]    (= bends[1] + … + bends[k])
+ *   Φ(windowRowStart + k + frac)    = prefix[k + 1] − prefix[1] + frac · bends[k + 1]
+ *
+ * This is the natural "Φ relative to the window start" reading; both the
+ * chunk baker and the per-frame skew matrix use it as their world-X anchor.
+ * Differences `cumulativeOffsetAt(rowA, …) − cumulativeOffsetAt(rowB, …)`
+ * agree with `rowOffset(rowA, rowB, …)` for free.
+ */
+export function cumulativeOffsetAt(
+  row: number,
+  windowRowStart: number,
+  bends: ArrayLike<number>,
+  prefix: Float32Array,
+): number {
+  const lo = Math.floor(row);
+  const frac = row - lo;
+  const local = lo - windowRowStart;
+  const base = readPrefixClamped(prefix, 1);
+  const slope = bendAt(bends, local + 1);
+  return readPrefixClamped(prefix, local + 1) - base + frac * slope;
+}
+
+/**
+ * Lerp-smoothed local tangent slope at the player's fractional row. This
+ * is the `s` used by `rebuildOffsetsTangentAligned` and by the world-space
+ * renderer's per-frame skew matrix. The smoothing keeps the rendered road
+ * continuous as the player crosses integer row boundaries.
+ *
+ *   s = (1 − frac) · bends[lo + 1] + frac · bends[lo + 2]
+ */
+export function tangentSlopeAt(
+  playerRow: number,
+  windowRowStart: number,
+  bends: ArrayLike<number>,
+): number {
+  const lo = Math.floor(playerRow);
+  const frac = playerRow - lo;
+  const local = lo - windowRowStart;
+  const s1 = bendAt(bends, local + 1);
+  const s2 = bendAt(bends, local + 2);
+  return (1 - frac) * s1 + frac * s2;
+}
+
+/**
  * "Tangent-aligned" presentation of the cumulative offsets. Subtracts a
  * tangent line at the player's position so the rendered road has BOTH zero
  * offset AND zero local slope at the player — the player never appears to

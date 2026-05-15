@@ -20,11 +20,19 @@ const CAMERA_HEIGHT = 80;
  * `VIEW_OFFSET_Z` so most of what you see is the road ahead, with the
  * player anchored slightly below centre.
  */
+export interface TopDownRenderHooks {
+  /** Called just before the topdown render if world-space mode is on. */
+  beforeUnskewed: () => void;
+  /** Called immediately after the topdown render to restore state. */
+  afterUnskewed: () => void;
+}
+
 export class TopDownView {
   readonly camera: THREE.OrthographicCamera;
   private readonly border: HTMLDivElement | null;
   private readonly label: HTMLDivElement | null;
   private visible = true;
+  private worldSpaceMode = false;
 
   constructor(parent: HTMLElement | null) {
     this.camera = new THREE.OrthographicCamera(
@@ -54,10 +62,25 @@ export class TopDownView {
     this.visible = v;
     if (this.border) this.border.style.display = v ? 'block' : 'none';
     if (this.label) this.label.style.display = v ? 'block' : 'none';
+    this.updateLabel();
   }
 
   isVisible(): boolean {
     return this.visible;
+  }
+
+  /**
+   * When on, the topdown render temporarily switches the worldRoot matrix
+   * to its translate-only form so the bird's-eye view shows the road's true
+   * (un-skewed) world-space curvature. The main view is unaffected.
+   */
+  setWorldSpaceMode(on: boolean): void {
+    this.worldSpaceMode = on;
+    this.updateLabel();
+  }
+
+  isWorldSpaceMode(): boolean {
+    return this.worldSpaceMode;
   }
 
   /** Track the player's vertical bob so the camera stays well above terrain. */
@@ -69,9 +92,11 @@ export class TopDownView {
   /**
    * Draw the scene from the top-down camera into a corner viewport.
    * Call AFTER the main `renderer.render(scene, mainCamera)` so the overlay
-   * sits on top.
+   * sits on top. If `hooks` are supplied and `worldSpaceMode` is on, the
+   * worldRoot matrix is swapped to its unskewed form for the duration of
+   * this render so the overlay shows the road's true curvature.
    */
-  render(renderer: THREE.WebGLRenderer, scene: THREE.Scene): void {
+  render(renderer: THREE.WebGLRenderer, scene: THREE.Scene, hooks?: TopDownRenderHooks): void {
     if (!this.visible) return;
     const canvas = renderer.domElement;
     const dpr = renderer.getPixelRatio();
@@ -90,7 +115,10 @@ export class TopDownView {
     renderer.setScissorTest(true);
     renderer.setScissor(x, y, wp, hp);
     renderer.setViewport(x, y, wp, hp);
+    const useUnskewed = this.worldSpaceMode && hooks !== undefined;
+    if (useUnskewed) hooks.beforeUnskewed();
     renderer.render(scene, this.camera);
+    if (useUnskewed) hooks.afterUnskewed();
     renderer.setScissorTest(false);
     renderer.setViewport(0, 0, canvas.width, canvas.height);
     scene.fog = savedFog;
@@ -99,6 +127,12 @@ export class TopDownView {
   destroy(): void {
     this.border?.remove();
     this.label?.remove();
+  }
+
+  private updateLabel(): void {
+    if (!this.label) return;
+    const tag = this.worldSpaceMode ? ' · world-space' : '';
+    this.label.textContent = `top-down · ${WORLD_HALF * 2}\u00d7${WORLD_HALF * 2}${tag}`;
   }
 }
 

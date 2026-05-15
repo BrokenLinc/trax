@@ -17,6 +17,7 @@ export function buildGui(opts: {
   onWireframeChange: (on: boolean) => void;
   onDebugVisible: (on: boolean) => void;
   onTopdownVisible: (on: boolean) => void;
+  onTopdownWorldSpace: (on: boolean) => void;
 }): GUI {
   const gui = new GUI({ title: 'mode7b', width: 300 });
 
@@ -25,10 +26,15 @@ export function buildGui(opts: {
     wireframe: opts.terrain.isWireframe(),
     debug: opts.debugDraw.isVisible(),
     topdown: opts.topdown.isVisible(),
+    topdownWorldSpace: opts.topdown.isWorldSpaceMode(),
   };
   visuals.add(visState, 'wireframe').onChange((v: boolean) => opts.onWireframeChange(v));
   visuals.add(visState, 'debug').onChange((v: boolean) => opts.onDebugVisible(v));
   visuals.add(visState, 'topdown').onChange((v: boolean) => opts.onTopdownVisible(v));
+  visuals
+    .add(visState, 'topdownWorldSpace')
+    .name('topdown world-space')
+    .onChange((v: boolean) => opts.onTopdownWorldSpace(v));
 
   const depth = gui.addFolder('depth map');
   const dp = opts.world.depth.getParams();

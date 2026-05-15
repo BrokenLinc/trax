@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cumulativeOffsetAt,
   prefixSum,
   rebuildOffsets,
   rebuildOffsetsTangentAligned,
   rowOffset,
   rowOffsetReference,
   rowOffsetTangentAligned,
+  tangentSlopeAt,
 } from '../src/render/bendMath.ts';
 
 const close = (a: number, b: number, eps = 1e-5) => Math.abs(a - b) < eps;
@@ -120,6 +122,74 @@ describe('rebuildOffsets', () => {
     const bends = new Float32Array([1, 2, 3]);
     const prefix = prefixSum(bends);
     expect(() => rebuildOffsets(0, 3, 0, bends, prefix, new Float32Array(2))).toThrow(/out length/);
+  });
+});
+
+describe('cumulativeOffsetAt — Φ for the world-space renderer', () => {
+  const windowRowStart = -5;
+  const bends = new Float32Array([2, -1, 3, 0, 1, 2, -2, 1, 0, 1, -1]);
+  const prefix = prefixSum(bends);
+
+  it('matches the difference identity for rowOffset', () => {
+    // rowOffset(row, playerRow) = Φ(row) − Φ(playerRow) by construction.
+    for (let pr10 = -30; pr10 <= 40; pr10++) {
+      const playerRow = pr10 / 10;
+      for (let row = -5; row <= 5; row++) {
+        const phiRow = cumulativeOffsetAt(row, windowRowStart, bends, prefix);
+        const phiPlayer = cumulativeOffsetAt(playerRow, windowRowStart, bends, prefix);
+        const direct = rowOffset(row, playerRow, windowRowStart, bends, prefix);
+        expect(close(phiRow - phiPlayer, direct)).toBe(true);
+      }
+    }
+  });
+
+  it('is zero at windowRowStart', () => {
+    expect(cumulativeOffsetAt(windowRowStart, windowRowStart, bends, prefix)).toBeCloseTo(0, 6);
+  });
+
+  it('returns the slope sum bends[1..k] at integer row windowRowStart + k', () => {
+    for (let k = 0; k < bends.length; k++) {
+      const row = windowRowStart + k;
+      const expected = (prefix[k + 1] ?? 0) - (prefix[1] ?? 0);
+      expect(cumulativeOffsetAt(row, windowRowStart, bends, prefix)).toBeCloseTo(expected, 6);
+    }
+  });
+
+  it('linearly interpolates between integer rows', () => {
+    const k = 3;
+    const frac = 0.37;
+    const row = windowRowStart + k + frac;
+    const expected = (prefix[k + 1] ?? 0) - (prefix[1] ?? 0) + frac * (bends[k + 1] ?? 0);
+    expect(cumulativeOffsetAt(row, windowRowStart, bends, prefix)).toBeCloseTo(expected, 6);
+  });
+});
+
+describe('tangentSlopeAt — per-frame skew slope', () => {
+  const windowRowStart = -5;
+  const bends = new Float32Array([2, -1, 3, 0, 1, 2, -2, 1, 0, 1, -1]);
+  const prefix = prefixSum(bends);
+
+  it('reproduces the s used by rebuildOffsetsTangentAligned', () => {
+    // For each playerRow, s should satisfy
+    //   rebuildOffsetsTangentAligned(row) = rowOffset(row, playerRow) − s·(row − playerRow)
+    for (let pr10 = -30; pr10 <= 40; pr10++) {
+      const playerRow = pr10 / 10;
+      const s = tangentSlopeAt(playerRow, windowRowStart, bends);
+      for (let row = -5; row <= 5; row++) {
+        const aligned = rowOffsetTangentAligned(row, playerRow, windowRowStart, bends, prefix);
+        const cumulative = rowOffset(row, playerRow, windowRowStart, bends, prefix);
+        const reconstructed = cumulative - s * (row - playerRow);
+        expect(close(reconstructed, aligned)).toBe(true);
+      }
+    }
+  });
+
+  it('equals the bend on either side at integer player rows', () => {
+    for (let k = -4; k <= 5; k++) {
+      const local = k - windowRowStart;
+      const expected = bends[local + 1] ?? 0;
+      expect(tangentSlopeAt(k, windowRowStart, bends)).toBeCloseTo(expected, 6);
+    }
   });
 });
 

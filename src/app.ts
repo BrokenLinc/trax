@@ -97,6 +97,7 @@ export class App {
           onWireframeChange: (v) => this.terrain.setWireframe(v),
           onDebugVisible: (v) => this.debugDraw.setVisible(v),
           onTopdownVisible: (v) => this.topdown.setVisible(v),
+          onTopdownWorldSpace: (v) => this.topdown.setWorldSpaceMode(v),
         });
 
     if (!opts.headless) {
@@ -268,7 +269,10 @@ export class App {
 
   private render(): void {
     this.renderer.render(this.scene, this.camera.camera);
-    this.topdown.render(this.renderer, this.scene);
+    this.topdown.render(this.renderer, this.scene, {
+      beforeUnskewed: () => this.terrain.pushUnskewedView(this.player.distance),
+      afterUnskewed: () => this.terrain.popUnskewedView(),
+    });
   }
 
   private updateFps(dt: number): void {
@@ -298,6 +302,8 @@ export class App {
       this.terrain.setWireframe(!this.terrain.isWireframe());
     } else if (e.code === 'KeyV') {
       this.topdown.setVisible(!this.topdown.isVisible());
+    } else if (e.code === 'KeyU') {
+      this.topdown.setWorldSpaceMode(!this.topdown.isWorldSpaceMode());
     }
   };
 }
