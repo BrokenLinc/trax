@@ -1,15 +1,13 @@
-import { BendField, DEFAULT_BEND_PARAMS, type BendFieldParams } from './bendField.ts';
-import { DepthMap, DEFAULT_DEPTH_PARAMS, type DepthMapParams } from './depthMap.ts';
+import { BendField, type BendFieldParams } from './bendField.ts';
+import { DepthMap, type DepthMapParams } from './depthMap.ts';
+import { DEFAULT_WORLD_PARAMS } from '../mode7Defaults.ts';
 
 export interface WorldParams {
   depth: DepthMapParams;
   bend: BendFieldParams;
 }
 
-export const DEFAULT_WORLD_PARAMS: WorldParams = {
-  depth: DEFAULT_DEPTH_PARAMS,
-  bend: DEFAULT_BEND_PARAMS,
-};
+export { DEFAULT_WORLD_PARAMS };
 
 /**
  * The world is the combined read-only API the renderer talks to. It owns

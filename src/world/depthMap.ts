@@ -1,3 +1,4 @@
+import { MODE7_DEFAULTS } from '../mode7Defaults.ts';
 import { fbm2D, makeNoise2D, type Noise2D } from './noise.ts';
 import { deriveSeed } from './rng.ts';
 
@@ -21,17 +22,8 @@ export interface DepthMapParams {
   roadFlatStrength: number;
 }
 
-export const DEFAULT_DEPTH_PARAMS: DepthMapParams = {
-  // Broader, gentler hills: lower frequency stretches features, fewer octaves
-  // and lower gain strip out the high-frequency crinkles.
-  frequency: 0.012,
-  amplitude: 1.2,
-  octaves: 3,
-  lacunarity: 2.0,
-  gain: 0.4,
-  roadFlatColumns: 5,
-  roadFlatStrength: 0.85,
-};
+/** @see MODE7_DEFAULTS.depth in `src/mode7Defaults.ts` */
+export const DEFAULT_DEPTH_PARAMS: DepthMapParams = MODE7_DEFAULTS.depth;
 
 /**
  * Samples the world's height field at integer (row, col) lattice positions.

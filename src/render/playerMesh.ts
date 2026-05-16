@@ -22,12 +22,15 @@ export interface PlayerMeshParams {
 }
 
 export const DEFAULT_PLAYER_MESH: PlayerMeshParams = {
-  // Half of DEFAULT_TERRAIN.rowSpacing — fits comfortably on the road.
-  // The chase camera in `camera.ts` assumes this same value when raising its
-  // look-at target to the sphere's centre; keep the two in sync.
+  // 1 world unit = 1 metre; the avatar is a 1 m diameter sphere. The chase
+  // camera in `camera.ts` mirrors this value as `SPHERE_CENTRE_OFFSET` when
+  // raising its look-at target onto the sphere's centre — keep them in sync.
   radius: 0.5,
-  rowSpacing: 1.0,
-  colSpacing: 0.6,
+  // Mirrors DEFAULT_TERRAIN.{rowSpacing, colSpacing} in terrainMesh.ts; the
+  // normal estimate in `update()` uses these as the divisors that turn the
+  // depth-map's lattice gradients into real world-space slopes.
+  rowSpacing: 4.0,
+  colSpacing: 4.0,
   normalStep: 0.5,
 };
 
@@ -62,6 +65,7 @@ export class PlayerMesh {
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.matrixAutoUpdate = true;
     this.mesh.frustumCulled = false;
+    this.mesh.castShadow = true;
   }
 
   /**
@@ -74,6 +78,7 @@ export class PlayerMesh {
   update(distance: number, world: World): void {
     const p = this.params;
     const centreY = world.depth.sampleBilinear(distance, 0);
+    // World origin: the avatar never strays in X or Z (the road moves instead).
     this.mesh.position.set(0, centreY + p.radius, 0);
 
     const h = p.normalStep;

@@ -31,8 +31,11 @@ export const DEFAULT_TERRAIN: TerrainParams = {
   rowsAhead: 60,
   rowsBehind: 14,
   cols: 33,
-  rowSpacing: 1.0,
-  colSpacing: 0.6,
+  // 1 world unit = 1 metre; quads are 4 m × 4 m. Mirrored by
+  // DEFAULT_PLAYER_MESH.{rowSpacing, colSpacing} in playerMesh.ts —
+  // the player's normal-estimate divides depth-map gradients by these.
+  rowSpacing: 4.0,
+  colSpacing: 4.0,
   rowsPerChunk: 32,
 };
 

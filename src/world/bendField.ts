@@ -1,3 +1,4 @@
+import { MODE7_DEFAULTS } from '../mode7Defaults.ts';
 import { makeNoise2D, type Noise2D } from './noise.ts';
 import { deriveSeed } from './rng.ts';
 
@@ -17,14 +18,8 @@ export interface BendFieldParams {
   detailFrequency: number;
 }
 
-export const DEFAULT_BEND_PARAMS: BendFieldParams = {
-  // Longer sweeping curves with a small amplitude — gentle winding rather
-  // than switchbacks. Per-row slope is the dominant turbulence knob.
-  frequency: 0.006,
-  amplitude: 0.18,
-  detailWeight: 0.05,
-  detailFrequency: 0.08,
-};
+/** @see MODE7_DEFAULTS.bend in `src/mode7Defaults.ts` */
+export const DEFAULT_BEND_PARAMS: BendFieldParams = MODE7_DEFAULTS.bend;
 
 /**
  * The 1D bend channel: one signed value per integer row index. Renderer

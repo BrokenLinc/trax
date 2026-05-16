@@ -237,6 +237,7 @@ export class ChunkStreamer {
     const material = this.wireframe ? this.materials.wireframe : this.materials.main;
     const mesh = new THREE.Mesh(baked.geometry, material);
     mesh.frustumCulled = false;
+    mesh.receiveShadow = true;
     mesh.position.set(phiAtStart, 0, -baked.rowStart * this.params.rowSpacing);
     this.group.add(mesh);
     this.chunks.set(baked.chunkIndex, { baked, mesh, phiAtStart });

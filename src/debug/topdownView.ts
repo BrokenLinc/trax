@@ -2,6 +2,29 @@ import * as THREE from 'three';
 
 const VIEWPORT_SIZE = 260;
 const VIEWPORT_MARGIN = 14;
+
+/**
+ * Inset layout in logical (CSS) pixels for `setViewport` / `setScissor`.
+ * Three.js multiplies these by `pixelRatio` to match the drawing buffer.
+ */
+function computeInsetViewportRect(renderer: THREE.WebGLRenderer): {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+} {
+  const canvas = renderer.domElement;
+  const cssW = Math.max(1, canvas.clientWidth);
+  const cssH = Math.max(1, canvas.clientHeight);
+  const margin = VIEWPORT_MARGIN;
+  let w = VIEWPORT_SIZE;
+  let h = VIEWPORT_SIZE;
+  w = Math.max(2, Math.min(w, cssW - 2));
+  h = Math.max(2, Math.min(h, cssH - 2));
+  const x = Math.max(0, cssW - w - margin);
+  const y = Math.max(0, margin);
+  return { x, y, w, h };
+}
 /** Half-extent of the view in world units; the view is square. */
 const WORLD_HALF = 30;
 /** How far ahead of the player to centre the view (negative Z = forward). */
@@ -98,13 +121,7 @@ export class TopDownView {
    */
   render(renderer: THREE.WebGLRenderer, scene: THREE.Scene, hooks?: TopDownRenderHooks): void {
     if (!this.visible) return;
-    const canvas = renderer.domElement;
-    const dpr = renderer.getPixelRatio();
-    const wp = VIEWPORT_SIZE * dpr;
-    const hp = VIEWPORT_SIZE * dpr;
-    // WebGL viewport origin is bottom-left of the drawing buffer; CSS pixels × DPR.
-    const x = (canvas.clientWidth - VIEWPORT_SIZE - VIEWPORT_MARGIN) * dpr;
-    const y = VIEWPORT_MARGIN * dpr;
+    const { x, y, w: wp, h: hp } = computeInsetViewportRect(renderer);
 
     // The main scene's fog kills any view from 80 units up — disable it
     // for the second render so the bird's-eye actually shows the mesh.
@@ -120,7 +137,8 @@ export class TopDownView {
     renderer.render(scene, this.camera);
     if (useUnskewed) hooks.afterUnskewed();
     renderer.setScissorTest(false);
-    renderer.setViewport(0, 0, canvas.width, canvas.height);
+    const canvas = renderer.domElement;
+    renderer.setViewport(0, 0, Math.max(1, canvas.clientWidth), Math.max(1, canvas.clientHeight));
     scene.fog = savedFog;
   }
 

@@ -1,6 +1,9 @@
 import GUI from 'lil-gui';
-import type { World } from '../world/world.ts';
+
+import { formatMode7DefaultsModuleSnippet } from '../mode7Defaults.ts';
+import type { ChaseCamera } from '../render/camera.ts';
 import type { TerrainMesh } from '../render/terrainMesh.ts';
+import type { World } from '../world/world.ts';
 import type { DebugDraw } from '../render/debugDraw.ts';
 import type { TopDownView } from './topdownView.ts';
 
@@ -11,6 +14,7 @@ import type { TopDownView } from './topdownView.ts';
  */
 export function buildGui(opts: {
   world: World;
+  chaseCamera: ChaseCamera;
   terrain: TerrainMesh;
   debugDraw: DebugDraw;
   topdown: TopDownView;
@@ -36,7 +40,7 @@ export function buildGui(opts: {
     .name('topdown world-space')
     .onChange((v: boolean) => opts.onTopdownWorldSpace(v));
 
-  // Slider ranges are biased toward the smooth aesthetic of DEFAULT_*_PARAMS;
+  // Slider ranges are biased toward the smooth aesthetic of MODE7_DEFAULTS;
   // headroom is preserved at the upper end for users who want to crank up the
   // turbulence on purpose.
   const depth = gui.addFolder('depth map');
@@ -55,6 +59,34 @@ export function buildGui(opts: {
   bend.add(bp, 'amplitude', 0, 1, 0.01).onChange(() => opts.world.bend.setParams(bp));
   bend.add(bp, 'detailWeight', 0, 0.5, 0.01).onChange(() => opts.world.bend.setParams(bp));
   bend.add(bp, 'detailFrequency', 0.005, 0.3, 0.005).onChange(() => opts.world.bend.setParams(bp));
+
+  const chase = gui.addFolder('chase camera');
+  const cp = opts.chaseCamera.getParams();
+  chase.add(cp, 'height', 0.5, 12, 0.05).onChange(() => opts.chaseCamera.setParams(cp));
+  chase.add(cp, 'back', 0, 25, 0.1).onChange(() => opts.chaseCamera.setParams(cp));
+  chase.add(cp, 'fov', 20, 100, 1).onChange(() => opts.chaseCamera.setParams(cp));
+  chase.add(cp, 'near', 0.01, 5, 0.01).onChange(() => opts.chaseCamera.setParams(cp));
+  chase.add(cp, 'far', 50, 2000, 1).onChange(() => opts.chaseCamera.setParams(cp));
+
+  const defaultsExport = {
+    copyMode7DefaultsSnippet: (): void => {
+      const text = formatMode7DefaultsModuleSnippet({
+        depth: opts.world.depth.getParams(),
+        bend: opts.world.bend.getParams(),
+        camera: opts.chaseCamera.getParams(),
+      });
+      const copy = async (): Promise<void> => {
+        try {
+          await navigator.clipboard.writeText(text);
+          console.info('[mode7] Copied mode7Defaults.ts snippet to clipboard.');
+        } catch {
+          console.info(text);
+        }
+      };
+      void copy();
+    },
+  };
+  gui.add(defaultsExport, 'copyMode7DefaultsSnippet').name('copy mode7Defaults snippet');
 
   return gui;
 }
