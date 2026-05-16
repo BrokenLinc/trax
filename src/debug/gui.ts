@@ -45,11 +45,11 @@ export function buildGui(opts: {
   // turbulence on purpose.
   const depth = gui.addFolder('depth map');
   const dp = opts.world.depth.getParams();
-  depth.add(dp, 'frequency', 0.002, 0.06, 0.001).onChange(() => opts.world.depth.setParams(dp));
-  depth.add(dp, 'amplitude', 0, 3, 0.05).onChange(() => opts.world.depth.setParams(dp));
-  depth.add(dp, 'octaves', 1, 5, 1).onChange(() => opts.world.depth.setParams(dp));
+  depth.add(dp, 'frequency', 0.001, 2, 0.001).onChange(() => opts.world.depth.setParams(dp));
+  depth.add(dp, 'amplitude', 0, 10, 0.05).onChange(() => opts.world.depth.setParams(dp));
+  depth.add(dp, 'octaves', 1, 10, 1).onChange(() => opts.world.depth.setParams(dp));
   depth.add(dp, 'lacunarity', 1.5, 3, 0.05).onChange(() => opts.world.depth.setParams(dp));
-  depth.add(dp, 'gain', 0.2, 0.6, 0.01).onChange(() => opts.world.depth.setParams(dp));
+  depth.add(dp, 'gain', 0.1, 2, 0.01).onChange(() => opts.world.depth.setParams(dp));
   depth.add(dp, 'roadFlatColumns', 0, 16, 1).onChange(() => opts.world.depth.setParams(dp));
   depth.add(dp, 'roadFlatStrength', 0, 1, 0.01).onChange(() => opts.world.depth.setParams(dp));
 
@@ -62,6 +62,8 @@ export function buildGui(opts: {
 
   const chase = gui.addFolder('chase camera');
   const cp = opts.chaseCamera.getParams();
+  chase.add(cp, 'aheadMeters', 0, 80, 0.5).onChange(() => opts.chaseCamera.setParams(cp));
+  chase.add(cp, 'aimElevation', 0, 5, 0.05).onChange(() => opts.chaseCamera.setParams(cp));
   chase.add(cp, 'height', 0.5, 12, 0.05).onChange(() => opts.chaseCamera.setParams(cp));
   chase.add(cp, 'back', 0, 25, 0.1).onChange(() => opts.chaseCamera.setParams(cp));
   chase.add(cp, 'fov', 20, 100, 1).onChange(() => opts.chaseCamera.setParams(cp));

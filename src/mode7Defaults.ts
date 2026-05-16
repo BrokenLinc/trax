@@ -15,25 +15,25 @@ export const MODE7_DEFAULTS: {
   depth: {
     // Broader, gentler hills: lower frequency stretches features, fewer octaves
     // and lower gain strip out the high-frequency crinkles.
-    frequency: 0.012,
-    amplitude: 1.2,
+    frequency: 0.173,
+    amplitude: 10,
     octaves: 3,
-    lacunarity: 2.0,
-    gain: 0.4,
-    roadFlatColumns: 5,
-    roadFlatStrength: 0.85,
+    lacunarity: 1.5,
+    gain: 2,
+    roadFlatColumns: 6,
+    roadFlatStrength: 1,
   },
   bend: {
     // Longer sweeping curves with a small amplitude — gentle winding rather
     // than switchbacks. Per-row slope is the dominant turbulence knob.
-    frequency: 0.006,
-    amplitude: 0.18,
+    frequency: 0.03,
+    amplitude: 1,
     detailWeight: 0.05,
     detailFrequency: 0.08,
   },
   camera: {
-    // `height` clears the player sphere (radius 0.5 in DEFAULT_PLAYER_MESH),
-    // `back` leaves breathing room behind it.
+    aheadMeters: 24,
+    aimElevation: 1.0,
     height: 2.6,
     back: 6.5,
     fov: 60,
@@ -86,8 +86,8 @@ function formatBendInner(p: BendFieldParams): string {
 
 function formatCameraInner(p: ChaseCameraParams): string {
   return [
-    `    // \`height\` clears the player sphere (radius 0.5 in DEFAULT_PLAYER_MESH),`,
-    `    // \`back\` leaves breathing room behind it.`,
+    `    aheadMeters: ${numLiteral(p.aheadMeters)},`,
+    `    aimElevation: ${numLiteral(p.aimElevation)},`,
     `    height: ${numLiteral(p.height)},`,
     `    back: ${numLiteral(p.back)},`,
     `    fov: ${numLiteral(p.fov)},`,

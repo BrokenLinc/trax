@@ -1,11 +1,16 @@
 import * as THREE from 'three';
 
 import { MODE7_DEFAULTS } from '../mode7Defaults.ts';
+import { World } from '../world/world.ts';
 
 export interface ChaseCameraParams {
-  /** Height of the camera above the player. */
+  /** World metres ahead along −Z for the look-at target. */
+  aheadMeters: number;
+  /** Metres above the ground depth sample at the aim row. */
+  aimElevation: number;
+  /** World-Y offset added after placing the eye on the player→aim line. */
   height: number;
-  /** Distance behind the player along +Z. */
+  /** Metres behind the player along the player→aim line. */
   back: number;
   /** Field of view in degrees. */
   fov: number;
@@ -18,25 +23,72 @@ export const DEFAULT_CAMERA: ChaseCameraParams = MODE7_DEFAULTS.camera;
 
 /**
  * Vertical offset from the ground sample to the player sphere's centre.
- * Mirrors `DEFAULT_PLAYER_MESH.radius` in `playerMesh.ts`; the chase camera
- * uses it to raise its look-at target onto the sphere rather than the road.
+ * Mirrors `DEFAULT_PLAYER_MESH.radius` in `playerMesh.ts`.
  */
-const SPHERE_CENTRE_OFFSET = 0.5;
+export const SPHERE_CENTRE_OFFSET = 0.5;
 
+export interface ChaseRigUpdate {
+  playerGroundY: number;
+  distance: number;
+  world: World;
+  rowSpacing: number;
+}
+
+export interface ChaseRig {
+  eye: THREE.Vector3;
+  aim: THREE.Vector3;
+}
+
+const _playerCentre = new THREE.Vector3();
+const _aimCentre = new THREE.Vector3();
+const _lineDir = new THREE.Vector3();
 const _eye = new THREE.Vector3();
 const _aim = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0);
 const _lookM = new THREE.Matrix4();
 
 /**
- * The "chase" camera is a misnomer — the player stays at the world origin,
- * so the camera also stays put except for tracking the player's vertical
- * bob over terrain. Using a fixed-offset camera makes the road-moves /
- * player-stays metaphor literal.
+ * Pure chase rig: eye behind the player on the line through the aim target,
+ * with a world-Y height offset. Player and aim stay on X = 0.
+ */
+export function computeChaseRig(
+  playerGroundY: number,
+  distance: number,
+  world: World,
+  params: ChaseCameraParams,
+  rowSpacing: number,
+  out: ChaseRig = { eye: new THREE.Vector3(), aim: new THREE.Vector3() },
+): ChaseRig {
+  const py = Number.isFinite(playerGroundY) ? playerGroundY : 0;
+  const ahead = Math.max(0, params.aheadMeters);
+  const aimRow = distance + ahead / rowSpacing;
+  const aimGroundY = world.depth.sampleBilinear(aimRow, 0);
+
+  _playerCentre.set(0, py + SPHERE_CENTRE_OFFSET, 0);
+  _aimCentre.set(0, aimGroundY + params.aimElevation, -ahead);
+  out.aim.copy(_aimCentre);
+
+  _lineDir.subVectors(_playerCentre, _aimCentre);
+  if (_lineDir.lengthSq() < 1e-12) {
+    _lineDir.set(0, 0, 1);
+  } else {
+    _lineDir.normalize();
+  }
+  out.eye
+    .copy(_playerCentre)
+    .addScaledVector(_lineDir, params.back)
+    .addScaledVector(_up, params.height);
+  return out;
+}
+
+/**
+ * Chase camera: looks at a terrain-following aim point ahead of the player;
+ * the eye sits behind the player on the line through both sphere centres.
  */
 export class ChaseCamera {
   readonly camera: THREE.PerspectiveCamera;
   private params: ChaseCameraParams;
+  private readonly rig: ChaseRig = { eye: new THREE.Vector3(), aim: new THREE.Vector3() };
 
   constructor(aspect: number, initial?: ChaseCameraParams) {
     this.params = { ...MODE7_DEFAULTS.camera, ...initial };
@@ -46,7 +98,12 @@ export class ChaseCamera {
       this.params.near,
       this.params.far,
     );
-    this.update(0);
+    this.update({
+      playerGroundY: 0,
+      distance: 0,
+      world: new World('camera-init'),
+      rowSpacing: 4,
+    });
   }
 
   getParams(): ChaseCameraParams {
@@ -66,20 +123,11 @@ export class ChaseCamera {
     this.camera.updateProjectionMatrix();
   }
 
-  /**
-   * Chase rig: eye behind the player on +Z, aim through the sphere centre at
-   * world origin. The player stays at X = Z = 0; using a far-ahead look target
-   * alone would miss that line and shift the avatar away from screen centre.
-   */
-  update(playerY: number): void {
+  update(ctx: ChaseRigUpdate): void {
     const p = this.params;
-    const py = Number.isFinite(playerY) ? playerY : 0;
-    const sphereCentreY = py + SPHERE_CENTRE_OFFSET;
-    // Eye and aim stay on world X = 0 so there is no lateral yaw.
-    _eye.set(0, py + p.height, p.back);
-    _aim.set(0, sphereCentreY, 0);
-    // Build orientation from Matrix4.lookAt — avoids Object3D.lookAt’s internal
-    // world-matrix path (can interact badly with a camera that is not scene‑parented).
+    computeChaseRig(ctx.playerGroundY, ctx.distance, ctx.world, p, ctx.rowSpacing, this.rig);
+    _eye.copy(this.rig.eye);
+    _aim.copy(this.rig.aim);
     _lookM.lookAt(_eye, _aim, _up);
     this.camera.quaternion.setFromRotationMatrix(_lookM);
     this.camera.position.copy(_eye);
@@ -94,17 +142,15 @@ const _comparePerspective = new THREE.PerspectiveCamera();
 
 /**
  * Angular disagreement (degrees) between the chase-camera orientation built
- * with `Matrix4.lookAt + setFromRotationMatrix` versus `PerspectiveCamera.lookAt`,
- * given the same eye/aim/up. Useful for diagnosing look-path regressions.
+ * with `Matrix4.lookAt + setFromRotationMatrix` versus `PerspectiveCamera.lookAt`.
  */
 export function diagnosticChaseVersusThreeLookAtDeg(
-  playerY: number,
+  ctx: ChaseRigUpdate,
   params: ChaseCameraParams,
 ): number {
-  const py = Number.isFinite(playerY) ? playerY : 0;
-  const sphereCentreY = py + SPHERE_CENTRE_OFFSET;
-  _eye.set(0, py + params.height, params.back);
-  _aim.set(0, sphereCentreY, 0);
+  const rig = computeChaseRig(ctx.playerGroundY, ctx.distance, ctx.world, params, ctx.rowSpacing);
+  _eye.copy(rig.eye);
+  _aim.copy(rig.aim);
   _lookM.lookAt(_eye, _aim, _up);
   _qFromLookMatrix.setFromRotationMatrix(_lookM);
 

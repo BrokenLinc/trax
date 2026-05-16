@@ -5,6 +5,7 @@ import {
   rebuildOffsetsTangentAligned,
   tangentSlopeAt,
 } from '../src/render/bendMath.ts';
+import type { BakedChunk } from '../src/render/chunkBaker.ts';
 import { bakeChunk, type ChunkParams } from '../src/render/chunkBaker.ts';
 import { ChunkStreamer, type StreamerParams } from '../src/render/chunkStreamer.ts';
 import { WorldFrame } from '../src/render/worldFrame.ts';
@@ -16,6 +17,32 @@ const CHUNK_PARAMS: ChunkParams = {
   rowSpacing: 1.0,
   colSpacing: 0.6,
 };
+
+function vertexAtLogical(
+  chunk: BakedChunk,
+  params: ChunkParams,
+  r: number,
+  c: number,
+): THREE.Vector3 {
+  const cols = params.cols % 2 === 0 ? params.cols + 1 : params.cols;
+  const centre = Math.floor(cols / 2);
+  const signedCol = c - centre;
+  const positions = chunk.geometry.getAttribute('position').array as Float32Array;
+  const absRow = chunk.rowStart + r;
+  const phi = cumulativeOffsetAt(absRow, chunk.rowStart, chunk.bends, chunk.prefix);
+  const x = signedCol * params.colSpacing + phi;
+  const z = -r * params.rowSpacing;
+  const tol = 1e-5;
+  for (let i = 0; i < positions.length; i += 3) {
+    const px = positions[i] ?? 0;
+    const py = positions[i + 1] ?? 0;
+    const pz = positions[i + 2] ?? 0;
+    if (Math.abs(px - x) < tol && Math.abs(pz - z) < tol) {
+      return new THREE.Vector3(px, py, pz);
+    }
+  }
+  throw new Error(`vertexAtLogical: no vertex at row ${r} col ${c}`);
+}
 
 function composeFrameMatrix(
   playerWorldX: number,
@@ -33,8 +60,6 @@ describe('WorldFrame matrix — single-chunk equivalence to rebuildOffsetsTangen
     const world = new World('worldFrameSingleChunk');
     const chunk = bakeChunk(world, 0, CHUNK_PARAMS);
     const cols = CHUNK_PARAMS.cols;
-    const centre = Math.floor(cols / 2);
-    const positions = chunk.geometry.getAttribute('position').array as Float32Array;
 
     // Sample the equivalence at a few fractional player rows inside the chunk.
     const playerRows = [0, 0.5, 1.0, 3.7, 7.25, 12.9, CHUNK_PARAMS.rowsPerChunk - 0.01];
@@ -55,12 +80,8 @@ describe('WorldFrame matrix — single-chunk equivalence to rebuildOffsetsTangen
       );
 
       for (let r = 0; r <= CHUNK_PARAMS.rowsPerChunk; r++) {
-        const idx = r * cols + centre;
-        const v = new THREE.Vector3(
-          positions[idx * 3] ?? 0,
-          positions[idx * 3 + 1] ?? 0,
-          positions[idx * 3 + 2] ?? 0,
-        ).applyMatrix4(M);
+        const centre = Math.floor(cols / 2);
+        const v = vertexAtLogical(chunk, CHUNK_PARAMS, r, centre).clone().applyMatrix4(M);
         const expectedX = 0 * CHUNK_PARAMS.colSpacing + (out[r] ?? 0);
         const expectedZ = -(chunk.rowStart + r - playerRow) * CHUNK_PARAMS.rowSpacing;
         expect(v.x).toBeCloseTo(expectedX, 4);
@@ -74,7 +95,6 @@ describe('WorldFrame matrix — single-chunk equivalence to rebuildOffsetsTangen
     const chunk = bakeChunk(world, 0, CHUNK_PARAMS);
     const cols = CHUNK_PARAMS.cols;
     const centre = Math.floor(cols / 2);
-    const positions = chunk.geometry.getAttribute('position').array as Float32Array;
     const playerRow = 5.4;
     const playerWorldX = cumulativeOffsetAt(playerRow, chunk.rowStart, chunk.bends, chunk.prefix);
     const playerZ = -playerRow * CHUNK_PARAMS.rowSpacing;
@@ -93,12 +113,7 @@ describe('WorldFrame matrix — single-chunk equivalence to rebuildOffsetsTangen
     for (let r = 0; r <= CHUNK_PARAMS.rowsPerChunk; r++) {
       for (let c = 0; c < cols; c++) {
         const signedCol = c - centre;
-        const idx = r * cols + c;
-        const v = new THREE.Vector3(
-          positions[idx * 3] ?? 0,
-          positions[idx * 3 + 1] ?? 0,
-          positions[idx * 3 + 2] ?? 0,
-        ).applyMatrix4(M);
+        const v = vertexAtLogical(chunk, CHUNK_PARAMS, r, c).clone().applyMatrix4(M);
         const expectedX = signedCol * CHUNK_PARAMS.colSpacing + (out[r] ?? 0);
         expect(v.x).toBeCloseTo(expectedX, 4);
       }

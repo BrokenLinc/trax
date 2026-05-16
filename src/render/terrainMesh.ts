@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { World } from '../world/world.ts';
 import { prefixSum, rebuildOffsetsTangentAligned } from './bendMath.ts';
 import { ChunkStreamer } from './chunkStreamer.ts';
+import { createTerrainSurfaceTexture } from './terrainSurface.ts';
 import { WorldFrame } from './worldFrame.ts';
 
 export interface TerrainParams {
@@ -66,6 +67,7 @@ export class TerrainMesh {
   private readonly worldFrame: WorldFrame;
   private readonly streamer: ChunkStreamer;
   private readonly material: THREE.MeshStandardMaterial;
+  private readonly surfaceTexture: THREE.DataTexture;
   private readonly wireMaterial: THREE.MeshBasicMaterial;
   private readonly bends: Float32Array;
   private readonly prefix: Float32Array;
@@ -82,8 +84,10 @@ export class TerrainMesh {
     this.params = sanitiseParams(params);
     this.rowCount = this.params.rowsAhead + this.params.rowsBehind + 1;
 
+    this.surfaceTexture = createTerrainSurfaceTexture();
     this.material = new THREE.MeshStandardMaterial({
-      color: 0x8aa0d6,
+      color: 0xffffff,
+      map: this.surfaceTexture,
       roughness: 0.85,
       metalness: 0.05,
       flatShading: true,
@@ -208,6 +212,7 @@ export class TerrainMesh {
   dispose(): void {
     this.streamer.dispose();
     this.material.dispose();
+    this.surfaceTexture.dispose();
     this.wireMaterial.dispose();
   }
 }

@@ -1,15 +1,19 @@
 import * as THREE from 'three';
+import type { World } from '../world/world.ts';
+
+const AIM_SPHERE_RADIUS = 0.12;
 
 /**
- * A small bundle of debug visuals: world axes at origin and a coloured
- * marker line tracing the road's centre offsets so curves are obvious
- * even on a flat-shaded mesh.
+ * A small bundle of debug visuals: world axes at origin, a coloured
+ * marker line tracing the road's centre offsets, and the chase-camera
+ * look-ahead aim sphere.
  */
 export class DebugDraw {
   readonly group = new THREE.Group();
   private readonly centreLine: THREE.Line;
   private readonly centreGeom: THREE.BufferGeometry;
   private readonly centreLen: number;
+  private readonly aimSphere: THREE.Mesh;
   private visible = true;
 
   constructor(rowCount: number) {
@@ -28,6 +32,17 @@ export class DebugDraw {
 
     const axes = new THREE.AxesHelper(1.5);
     this.group.add(axes);
+
+    this.aimSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(AIM_SPHERE_RADIUS, 16, 12),
+      new THREE.MeshStandardMaterial({
+        color: 0x66ccff,
+        roughness: 0.5,
+        metalness: 0.1,
+      }),
+    );
+    this.aimSphere.frustumCulled = false;
+    this.group.add(this.aimSphere);
   }
 
   setVisible(on: boolean): void {
@@ -56,5 +71,23 @@ export class DebugDraw {
       arr[i * 3 + 2] = -(absRow - playerRow) * rowSpacing;
     }
     attr.needsUpdate = true;
+  }
+
+  /**
+   * Place the look-ahead aim sphere at the chase camera's look target.
+   * Upright (no terrain tilt); hidden when debug visuals are off.
+   */
+  updateAimTarget(
+    distance: number,
+    world: World,
+    aheadMeters: number,
+    aimElevation: number,
+    rowSpacing: number,
+  ): void {
+    const ahead = Math.max(0, aheadMeters);
+    const row = distance + ahead / rowSpacing;
+    const y = world.depth.sampleBilinear(row, 0) + aimElevation;
+    this.aimSphere.position.set(0, y, -ahead);
+    this.aimSphere.quaternion.identity();
   }
 }

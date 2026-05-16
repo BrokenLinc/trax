@@ -293,7 +293,8 @@ export class App {
     this.render();
 
     const cam = this.camera.camera;
-    this.camera.update(this.player.y);
+    const chaseCtx = this.chaseRigContext();
+    this.camera.update(chaseCtx);
     cam.updateMatrixWorld(true);
     cam.updateProjectionMatrix();
 
@@ -303,12 +304,13 @@ export class App {
 
     const fwd = cam.getWorldDirection(new THREE.Vector3());
     const params = this.camera.getParams();
-    const py = Number.isFinite(this.player.y) ? this.player.y : 0;
-    const aimY = py + 0.5;
-    const aimFromEyeUnit = new THREE.Vector3(0, aimY, 0).sub(cam.position).normalize();
+    const ahead = Math.max(0, params.aheadMeters);
+    const aimRow = this.player.distance + ahead / chaseCtx.rowSpacing;
+    const aimY = this.world.depth.sampleBilinear(aimRow, 0) + params.aimElevation;
+    const aimFromEyeUnit = new THREE.Vector3(0, aimY, -ahead).sub(cam.position).normalize();
     const dot = fwd.dot(aimFromEyeUnit);
 
-    const dq = diagnosticChaseVersusThreeLookAtDeg(this.player.y, params);
+    const dq = diagnosticChaseVersusThreeLookAtDeg(chaseCtx, params);
 
     const rect = this.container.getBoundingClientRect();
     const cvs = this.renderer.domElement;
@@ -379,6 +381,20 @@ export class App {
 
   // --- Internals -----------------------------------------------------------
 
+  private chaseRigContext(): {
+    playerGroundY: number;
+    distance: number;
+    world: World;
+    rowSpacing: number;
+  } {
+    return {
+      playerGroundY: this.player.y,
+      distance: this.player.distance,
+      world: this.world,
+      rowSpacing: this.terrain.getParams().rowSpacing,
+    };
+  }
+
   private simulate(dt: number): void {
     if (dt > 0) this.controller.update(this.player, dt);
     this.player.y = this.world.depth.sampleBilinear(this.player.distance, 0);
@@ -389,7 +405,15 @@ export class App {
       this.terrain.getParams().rowSpacing,
       this.player.distance,
     );
-    this.camera.update(this.player.y);
+    const camParams = this.camera.getParams();
+    this.debugDraw.updateAimTarget(
+      this.player.distance,
+      this.world,
+      camParams.aheadMeters,
+      camParams.aimElevation,
+      this.terrain.getParams().rowSpacing,
+    );
+    this.camera.update(this.chaseRigContext());
     this.topdown.update(this.player.y);
     if (this.hud) {
       const lo = Math.floor(this.player.distance);

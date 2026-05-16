@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { World } from '../world/world.ts';
 import { cumulativeOffsetAt, prefixSum } from './bendMath.ts';
+import { uvForSurface, type SurfaceKind } from './terrainSurface.ts';
 
 export interface ChunkParams {
   /** Number of row-intervals per chunk (each chunk owns `rowsPerChunk + 1` rows of vertices). */
@@ -45,6 +46,13 @@ export interface BakedChunk {
   geometry: THREE.BufferGeometry;
 }
 
+interface RowVerts {
+  /** Vertex index on the left face of column `c` (toward lower `c`). */
+  left: number[];
+  /** Vertex index on the right face of column `c` (toward higher `c`). */
+  right: number[];
+}
+
 /**
  * Bake one chunk's geometry from the procedural world. Pure: same
  * `(world.seed, world.params, chunkIndex, params)` always produces the
@@ -67,43 +75,67 @@ export function bakeChunk(world: World, chunkIndex: number, params: ChunkParams)
   const rowEnd = rowStart + rowsPerChunk;
   const vertRows = rowsPerChunk + 1;
 
-  // Bend window aligned to the chunk: bends[i] is the slope on
-  // [rowStart + i − 1, rowStart + i]. Inside the chunk we integrate the
-  // slopes bends[1..rowsPerChunk] to step from row rowStart up to rowEnd.
-  // bends[0] is the slope at the chunk's leading edge (matches the previous
-  // chunk's trailing slope), kept here so cumulativeOffsetAt can resolve a
-  // possible queries one step behind the chunk start if a caller ever asks.
   const bends = new Float32Array(vertRows);
   for (let i = 0; i < vertRows; i++) {
     bends[i] = world.bend.sample(rowStart + i);
   }
   const prefix = prefixSum(bends);
 
-  const positions = new Float32Array(vertRows * cols * 3);
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+  const rowVtx: RowVerts[] = [];
+
   for (let r = 0; r < vertRows; r++) {
     const absRow = rowStart + r;
     const phiLocal = cumulativeOffsetAt(absRow, rowStart, bends, prefix);
     const z = -r * rowSpacing;
-    const rowBase = r * cols * 3;
+    const left: number[] = new Array<number>(cols).fill(-1);
+    const right: number[] = new Array<number>(cols).fill(-1);
+
     for (let c = 0; c < cols; c++) {
       const signedCol = c - centreCol;
       const x = signedCol * colSpacing + phiLocal;
       const y = world.depth.sample(absRow, signedCol);
-      const idx = rowBase + c * 3;
-      positions[idx] = x;
-      positions[idx + 1] = y;
-      positions[idx + 2] = z;
+      const side = signedCol < 0 ? 'left' : 'right';
+
+      if (c === centreCol - 1) {
+        left[c] = pushVertex(positions, uvs, x, y, z, 'shoulder', 'left');
+        right[c] = pushVertex(positions, uvs, x, y, z, 'asphalt', 'left');
+      } else if (c === centreCol) {
+        left[c] = pushVertex(positions, uvs, x, y, z, 'asphalt', 'left');
+        right[c] = pushVertex(positions, uvs, x, y, z, 'asphalt', 'right');
+      } else if (c === centreCol + 1) {
+        left[c] = pushVertex(positions, uvs, x, y, z, 'asphalt', 'right');
+        right[c] = pushVertex(positions, uvs, x, y, z, 'shoulder', 'right');
+      } else {
+        const idx = pushVertex(positions, uvs, x, y, z, 'shoulder', side);
+        left[c] = idx;
+        right[c] = idx;
+      }
+    }
+
+    rowVtx.push({ left, right });
+  }
+
+  for (let r = 0; r < vertRows - 1; r++) {
+    const rowLo = rowVtx[r];
+    const rowHi = rowVtx[r + 1];
+    if (!rowLo || !rowHi) continue;
+    for (let c = 0; c < cols - 1; c++) {
+      const a = rowLo.right[c] ?? 0;
+      const b = rowLo.left[c + 1] ?? 0;
+      const cc = rowHi.right[c] ?? 0;
+      const d = rowHi.left[c + 1] ?? 0;
+      // Same winding as the legacy grid builder for flat-shading parity.
+      indices.push(a, cc, b, b, cc, d);
     }
   }
 
-  const indices = buildChunkIndices(vertRows, cols);
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-  // Normals are computed once at bake time; the MeshStandardMaterial's
-  // flatShading still picks up curvature via fragment-shader derivatives,
-  // but populating the attribute keeps lighting reasonable if a future
-  // material switches flatShading off.
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
   geometry.computeVertexNormals();
 
   const phiLocalSpan = cumulativeOffsetAt(rowEnd, rowStart, bends, prefix);
@@ -111,28 +143,18 @@ export function bakeChunk(world: World, chunkIndex: number, params: ChunkParams)
   return { chunkIndex, rowStart, rowEnd, phiLocalSpan, bends, prefix, geometry };
 }
 
-/**
- * Two triangles per quad, matching the order used by the legacy
- * `terrainMesh` so flat-shading derivatives produce the same face
- * orientations as before.
- */
-function buildChunkIndices(vertRows: number, cols: number): Uint32Array {
-  const quads = (vertRows - 1) * (cols - 1);
-  const out = new Uint32Array(quads * 6);
-  let w = 0;
-  for (let r = 0; r < vertRows - 1; r++) {
-    for (let c = 0; c < cols - 1; c++) {
-      const a = r * cols + c;
-      const b = a + 1;
-      const cc = a + cols;
-      const d = cc + 1;
-      out[w++] = a;
-      out[w++] = cc;
-      out[w++] = b;
-      out[w++] = b;
-      out[w++] = cc;
-      out[w++] = d;
-    }
-  }
-  return out;
+function pushVertex(
+  positions: number[],
+  uvs: number[],
+  x: number,
+  y: number,
+  z: number,
+  surface: SurfaceKind,
+  side: 'left' | 'right',
+): number {
+  const idx = positions.length / 3;
+  positions.push(x, y, z);
+  const [u, v] = uvForSurface(surface, side);
+  uvs.push(u, v);
+  return idx;
 }
