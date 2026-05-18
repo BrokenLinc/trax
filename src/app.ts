@@ -6,6 +6,7 @@ import { ChaseCamera, diagnosticChaseVersusThreeLookAtDeg } from './render/camer
 import { createScene } from './render/scene.ts';
 import { TerrainMesh, type TerrainSnapshot } from './render/terrainMesh.ts';
 import { PlayerMesh } from './render/playerMesh.ts';
+import { WaterPlane } from './render/waterPlane.ts';
 import { DebugDraw } from './render/debugDraw.ts';
 import { PlayerController } from './player/controller.ts';
 import { createPlayerState, type PlayerState } from './player/state.ts';
@@ -51,6 +52,7 @@ export class App {
   private readonly scene: THREE.Scene;
   private readonly terrain: TerrainMesh;
   private readonly playerMesh: PlayerMesh;
+  private readonly water: WaterPlane;
   private readonly debugDraw: DebugDraw;
   private readonly controller: PlayerController;
   private readonly player: PlayerState;
@@ -95,6 +97,9 @@ export class App {
     this.scene = rig.scene;
 
     this.world = new World(opts.seed);
+    this.water = new WaterPlane();
+    this.scene.add(this.water.mesh);
+
     this.terrain = new TerrainMesh(this.world);
     this.scene.add(this.terrain.mesh);
 
@@ -121,6 +126,7 @@ export class App {
           world: this.world,
           chaseCamera: this.camera,
           terrain: this.terrain,
+          water: this.water,
           debugDraw: this.debugDraw,
           topdown: this.topdown,
           onWireframeChange: (v) => this.terrain.setWireframe(v),
@@ -180,6 +186,7 @@ export class App {
     this.gui?.destroy();
     this.topdown.destroy();
     this.playerMesh.dispose();
+    this.water.dispose();
     this.terrain.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();

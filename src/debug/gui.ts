@@ -3,6 +3,7 @@ import GUI from 'lil-gui';
 import { formatMode7DefaultsModuleSnippet } from '../mode7Defaults.ts';
 import type { ChaseCamera } from '../render/camera.ts';
 import type { TerrainMesh } from '../render/terrainMesh.ts';
+import type { WaterPlane } from '../render/waterPlane.ts';
 import type { World } from '../world/world.ts';
 import type { DebugDraw } from '../render/debugDraw.ts';
 import type { TopDownView } from './topdownView.ts';
@@ -16,6 +17,7 @@ export function buildGui(opts: {
   world: World;
   chaseCamera: ChaseCamera;
   terrain: TerrainMesh;
+  water: WaterPlane;
   debugDraw: DebugDraw;
   topdown: TopDownView;
   onWireframeChange: (on: boolean) => void;
@@ -40,13 +42,16 @@ export function buildGui(opts: {
     .name('topdown world-space')
     .onChange((v: boolean) => opts.onTopdownWorldSpace(v));
 
+  const wp = opts.water.getParams();
+  visuals.add(wp, 'y', -60, 30, 0.5).name('water height').onChange(() => opts.water.setParams(wp));
+
   // Slider ranges are biased toward the smooth aesthetic of MODE7_DEFAULTS;
   // headroom is preserved at the upper end for users who want to crank up the
   // turbulence on purpose.
   const depth = gui.addFolder('depth map');
   const dp = opts.world.depth.getParams();
   depth.add(dp, 'frequency', 0.001, 2, 0.001).onChange(() => opts.world.depth.setParams(dp));
-  depth.add(dp, 'amplitude', 0, 10, 0.05).onChange(() => opts.world.depth.setParams(dp));
+  depth.add(dp, 'amplitude', 0, 50, 0.05).onChange(() => opts.world.depth.setParams(dp));
   depth.add(dp, 'octaves', 1, 10, 1).onChange(() => opts.world.depth.setParams(dp));
   depth.add(dp, 'lacunarity', 1.5, 3, 0.05).onChange(() => opts.world.depth.setParams(dp));
   depth.add(dp, 'gain', 0.1, 2, 0.01).onChange(() => opts.world.depth.setParams(dp));
@@ -56,7 +61,7 @@ export function buildGui(opts: {
   const bend = gui.addFolder('bend field');
   const bp = opts.world.bend.getParams();
   bend.add(bp, 'frequency', 0.001, 0.03, 0.001).onChange(() => opts.world.bend.setParams(bp));
-  bend.add(bp, 'amplitude', 0, 1, 0.01).onChange(() => opts.world.bend.setParams(bp));
+  bend.add(bp, 'amplitude', 0, 5, 0.01).onChange(() => opts.world.bend.setParams(bp));
   bend.add(bp, 'detailWeight', 0, 0.5, 0.01).onChange(() => opts.world.bend.setParams(bp));
   bend.add(bp, 'detailFrequency', 0.005, 0.3, 0.005).onChange(() => opts.world.bend.setParams(bp));
 

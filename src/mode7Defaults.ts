@@ -2,6 +2,7 @@ import type { ChaseCameraParams } from './render/camera.ts';
 import type { BendFieldParams } from './world/bendField.ts';
 import type { DepthMapParams } from './world/depthMap.ts';
 import type { WorldParams } from './world/world.ts';
+// Paste over MODE7_DEFAULTS and DEFAULT_WORLD_PARAMS in src/mode7Defaults.ts
 
 /**
  * Single source of truth for tunable procedural + chase-camera defaults exposed
@@ -15,25 +16,25 @@ export const MODE7_DEFAULTS: {
   depth: {
     // Broader, gentler hills: lower frequency stretches features, fewer octaves
     // and lower gain strip out the high-frequency crinkles.
-    frequency: 0.173,
-    amplitude: 10,
+    frequency: 0.01,
+    amplitude: 50,
     octaves: 3,
     lacunarity: 1.5,
     gain: 2,
     roadFlatColumns: 6,
-    roadFlatStrength: 1,
+    roadFlatStrength: 0.5,
   },
   bend: {
     // Longer sweeping curves with a small amplitude — gentle winding rather
     // than switchbacks. Per-row slope is the dominant turbulence knob.
     frequency: 0.03,
-    amplitude: 1,
+    amplitude: 5,
     detailWeight: 0.05,
     detailFrequency: 0.08,
   },
   camera: {
     aheadMeters: 24,
-    aimElevation: 1.0,
+    aimElevation: 1,
     height: 2.6,
     back: 6.5,
     fov: 60,
