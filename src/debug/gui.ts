@@ -74,7 +74,7 @@ export function buildGui(opts: {
   const depth = gui.addFolder('depth map');
   const dp = opts.world.depth.getParams();
   depth.add(dp, 'frequency', 0.001, 2, 0.001).onChange(() => opts.world.depth.setParams(dp));
-  depth.add(dp, 'amplitude', 0, 50, 0.05).onChange(() => opts.world.depth.setParams(dp));
+  depth.add(dp, 'amplitude', 0, 200, 0.05).onChange(() => opts.world.depth.setParams(dp));
   depth.add(dp, 'octaves', 1, 10, 1).onChange(() => opts.world.depth.setParams(dp));
   depth.add(dp, 'lacunarity', 1.5, 3, 0.05).onChange(() => opts.world.depth.setParams(dp));
   depth.add(dp, 'gain', 0.1, 2, 0.01).onChange(() => opts.world.depth.setParams(dp));
@@ -86,6 +86,22 @@ export function buildGui(opts: {
     .add(dp, 'shoulderBlendColumns', 0, 16, 1)
     .name('shoulder blend cols')
     .onChange(() => opts.world.depth.setParams(dp));
+
+  const mesh = gui.addFolder('mesh');
+  const tp = opts.terrain.getParams();
+  const syncMesh = (): void => {
+    opts.terrain.setParams({
+      rowSpacing: tp.rowSpacing,
+      roadColSpacing: tp.roadColSpacing,
+      landscapeColSpacing: tp.landscapeColSpacing,
+    });
+  };
+  mesh.add(tp, 'rowSpacing', 0.5, 16, 0.25).name('row spacing').onChange(syncMesh);
+  mesh.add(tp, 'roadColSpacing', 0.5, 16, 0.25).name('road col spacing').onChange(syncMesh);
+  mesh
+    .add(tp, 'landscapeColSpacing', 0.5, 24, 0.25)
+    .name('landscape col spacing')
+    .onChange(syncMesh);
 
   const bend = gui.addFolder('bend field');
   const bp = opts.world.bend.getParams();
@@ -106,11 +122,17 @@ export function buildGui(opts: {
 
   const defaultsExport = {
     copyMode7DefaultsSnippet: (): void => {
+      const terrainParams = opts.terrain.getParams();
       const text = formatMode7DefaultsModuleSnippet({
         depth: opts.world.depth.getParams(),
         bend: opts.world.bend.getParams(),
         camera: opts.chaseCamera.getParams(),
         fog: opts.sceneFog.getParams(),
+        terrain: {
+          rowSpacing: terrainParams.rowSpacing,
+          roadColSpacing: terrainParams.roadColSpacing,
+          landscapeColSpacing: terrainParams.landscapeColSpacing,
+        },
       });
       const copy = async (): Promise<void> => {
         try {

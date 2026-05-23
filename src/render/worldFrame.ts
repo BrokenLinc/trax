@@ -29,7 +29,7 @@ export class WorldFrame {
 
   constructor(
     private readonly streamer: ChunkStreamer,
-    private readonly params: WorldFrameParams,
+    private params: WorldFrameParams,
   ) {
     this.worldRoot.matrixAutoUpdate = false;
     this.worldRoot.add(this.streamer.group);
@@ -58,6 +58,10 @@ export class WorldFrame {
     this.tmpShear.makeShear(0, 0, 0, 0, s / this.params.rowSpacing, 0);
     this.worldRoot.matrix.multiplyMatrices(this.tmpShear, this.tmpTranslate);
     this.worldRoot.matrixWorldNeedsUpdate = true;
+  }
+
+  setParams(params: WorldFrameParams): void {
+    this.params = params;
   }
 
   /** Debug toggle for the bird's-eye view: disables the X-from-Z shear. */

@@ -7,7 +7,8 @@ export interface StreamerParams {
   rowsPerChunk: number;
   cols: number;
   rowSpacing: number;
-  colSpacing: number;
+  roadColSpacing: number;
+  landscapeColSpacing: number;
   /** How many rows ahead of the player to keep loaded. */
   rowsAhead: number;
   /** How many rows behind the player to keep loaded. */
@@ -67,6 +68,13 @@ export class ChunkStreamer {
   /** Hot-swap the underlying world (e.g. on reseed). Forces a full rebake. */
   setWorld(world: World): void {
     this.world = world;
+    this.bakeSource = this.defaultBakeSource();
+    this.invalidate();
+  }
+
+  /** Update streamer params (e.g. mesh spacing). Forces a full rebake. */
+  setParams(params: StreamerParams): void {
+    this.params = params;
     this.bakeSource = this.defaultBakeSource();
     this.invalidate();
   }
@@ -223,7 +231,8 @@ export class ChunkStreamer {
       rowsPerChunk: this.params.rowsPerChunk,
       cols: this.params.cols,
       rowSpacing: this.params.rowSpacing,
-      colSpacing: this.params.colSpacing,
+      roadColSpacing: this.params.roadColSpacing,
+      landscapeColSpacing: this.params.landscapeColSpacing,
     };
     return (idx) => bakeChunk(this.world, idx, chunkParams);
   }

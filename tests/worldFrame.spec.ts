@@ -7,6 +7,7 @@ import {
 } from '../src/render/bendMath.ts';
 import type { BakedChunk } from '../src/render/chunkBaker.ts';
 import { bakeChunk, type ChunkParams } from '../src/render/chunkBaker.ts';
+import { worldXForSignedCol } from '../src/render/meshLattice.ts';
 import { ChunkStreamer, type StreamerParams } from '../src/render/chunkStreamer.ts';
 import { WorldFrame } from '../src/render/worldFrame.ts';
 import { World } from '../src/world/world.ts';
@@ -15,7 +16,8 @@ const CHUNK_PARAMS: ChunkParams = {
   rowsPerChunk: 16,
   cols: 7,
   rowSpacing: 1.0,
-  colSpacing: 0.6,
+  roadColSpacing: 0.6,
+  landscapeColSpacing: 0.6,
 };
 
 function vertexAtLogical(
@@ -30,7 +32,7 @@ function vertexAtLogical(
   const positions = chunk.geometry.getAttribute('position').array as Float32Array;
   const absRow = chunk.rowStart + r;
   const phi = cumulativeOffsetAt(absRow, chunk.rowStart, chunk.bends, chunk.prefix);
-  const x = signedCol * params.colSpacing + phi;
+  const x = worldXForSignedCol(signedCol, params.roadColSpacing, params.landscapeColSpacing) + phi;
   const z = -r * params.rowSpacing;
   const tol = 1e-5;
   for (let i = 0; i < positions.length; i += 3) {
@@ -82,7 +84,7 @@ describe('WorldFrame matrix — single-chunk equivalence to rebuildOffsetsTangen
       for (let r = 0; r <= CHUNK_PARAMS.rowsPerChunk; r++) {
         const centre = Math.floor(cols / 2);
         const v = vertexAtLogical(chunk, CHUNK_PARAMS, r, centre).clone().applyMatrix4(M);
-        const expectedX = 0 * CHUNK_PARAMS.colSpacing + (out[r] ?? 0);
+        const expectedX = out[r] ?? 0;
         const expectedZ = -(chunk.rowStart + r - playerRow) * CHUNK_PARAMS.rowSpacing;
         expect(v.x).toBeCloseTo(expectedX, 4);
         expect(v.z).toBeCloseTo(expectedZ, 4);
@@ -90,7 +92,7 @@ describe('WorldFrame matrix — single-chunk equivalence to rebuildOffsetsTangen
     }
   });
 
-  it('extends to non-centre columns with the right X offset = signedCol·colSpacing + visible(r)', () => {
+  it('extends to non-centre columns with the right X offset = worldXForSignedCol + visible(r)', () => {
     const world = new World('worldFrameAllCols');
     const chunk = bakeChunk(world, 0, CHUNK_PARAMS);
     const cols = CHUNK_PARAMS.cols;
@@ -114,7 +116,12 @@ describe('WorldFrame matrix — single-chunk equivalence to rebuildOffsetsTangen
       for (let c = 0; c < cols; c++) {
         const signedCol = c - centre;
         const v = vertexAtLogical(chunk, CHUNK_PARAMS, r, c).clone().applyMatrix4(M);
-        const expectedX = signedCol * CHUNK_PARAMS.colSpacing + (out[r] ?? 0);
+        const expectedX =
+          worldXForSignedCol(
+            signedCol,
+            CHUNK_PARAMS.roadColSpacing,
+            CHUNK_PARAMS.landscapeColSpacing,
+          ) + (out[r] ?? 0);
         expect(v.x).toBeCloseTo(expectedX, 4);
       }
     }
@@ -125,7 +132,8 @@ const STREAMER_PARAMS: StreamerParams = {
   rowsPerChunk: CHUNK_PARAMS.rowsPerChunk,
   cols: CHUNK_PARAMS.cols,
   rowSpacing: CHUNK_PARAMS.rowSpacing,
-  colSpacing: CHUNK_PARAMS.colSpacing,
+  roadColSpacing: CHUNK_PARAMS.roadColSpacing,
+  landscapeColSpacing: CHUNK_PARAMS.landscapeColSpacing,
   rowsAhead: 32,
   rowsBehind: 8,
 };
@@ -173,7 +181,14 @@ describe('WorldFrame matrix — multi-chunk seam continuity', () => {
       expect(containing).toBeDefined();
       const baked = containing!.baked;
       const local = cumulativeOffsetAt(fixedAbsRow, baked.rowStart, baked.bends, baked.prefix);
-      const worldX = containing!.phiAtStart + local + fixedSignedCol * STREAMER_PARAMS.colSpacing;
+      const worldX =
+        containing!.phiAtStart +
+        local +
+        worldXForSignedCol(
+          fixedSignedCol,
+          STREAMER_PARAMS.roadColSpacing,
+          STREAMER_PARAMS.landscapeColSpacing,
+        );
       const worldZ = -fixedAbsRow * STREAMER_PARAMS.rowSpacing;
       const p = new THREE.Vector3(worldX, 0, worldZ).applyMatrix4(frame.worldRoot.matrix);
       return p.x;

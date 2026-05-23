@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { MODE7_DEFAULTS } from '../mode7Defaults.ts';
 import type { World } from '../world/world.ts';
 import { prefixSum, rebuildOffsetsTangentAligned } from './bendMath.ts';
 import { ChunkStreamer } from './chunkStreamer.ts';
@@ -17,8 +18,10 @@ export interface TerrainParams {
   cols: number;
   /** World units between adjacent rows (Z axis). */
   rowSpacing: number;
-  /** World units between adjacent columns (X axis). */
-  colSpacing: number;
+  /** Column spacing on X for the road band (signedCol −1, 0, +1). */
+  roadColSpacing: number;
+  /** Column spacing on X from signedCol ±1 outward. */
+  landscapeColSpacing: number;
   /**
    * Number of row-intervals per static chunk. A chunk holds
    * `rowsPerChunk + 1` rows of vertices and is baked once when it enters
@@ -32,11 +35,7 @@ export const DEFAULT_TERRAIN: TerrainParams = {
   rowsAhead: 60,
   rowsBehind: 14,
   cols: 33,
-  // 1 world unit = 1 metre; quads are 4 m × 4 m. Mirrored by
-  // DEFAULT_PLAYER_MESH.{rowSpacing, colSpacing} in playerMesh.ts —
-  // the player's normal-estimate divides depth-map gradients by these.
-  rowSpacing: 4.0,
-  colSpacing: 4.0,
+  ...MODE7_DEFAULTS.terrain,
   rowsPerChunk: 32,
 };
 
@@ -106,7 +105,8 @@ export class TerrainMesh {
         rowsPerChunk: this.params.rowsPerChunk,
         cols: this.params.cols,
         rowSpacing: this.params.rowSpacing,
-        colSpacing: this.params.colSpacing,
+        roadColSpacing: this.params.roadColSpacing,
+        landscapeColSpacing: this.params.landscapeColSpacing,
         rowsAhead: this.params.rowsAhead,
         rowsBehind: this.params.rowsBehind,
       },
@@ -124,6 +124,20 @@ export class TerrainMesh {
 
   getParams(): TerrainParams {
     return this.params;
+  }
+
+  setParams(partial: Partial<TerrainParams>): void {
+    this.params = sanitiseParams({ ...this.params, ...partial });
+    this.streamer.setParams({
+      rowsPerChunk: this.params.rowsPerChunk,
+      cols: this.params.cols,
+      rowSpacing: this.params.rowSpacing,
+      roadColSpacing: this.params.roadColSpacing,
+      landscapeColSpacing: this.params.landscapeColSpacing,
+      rowsAhead: this.params.rowsAhead,
+      rowsBehind: this.params.rowsBehind,
+    });
+    this.worldFrame.setParams({ rowSpacing: this.params.rowSpacing });
   }
 
   getRowCount(): number {

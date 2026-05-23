@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { World } from '../world/world.ts';
 import { cumulativeOffsetAt, prefixSum } from './bendMath.ts';
+import { worldXForSignedCol } from './meshLattice.ts';
 import { uvForSurface, type SurfaceKind } from './terrainSurface.ts';
 
 export interface ChunkParams {
@@ -10,15 +11,18 @@ export interface ChunkParams {
   cols: number;
   /** World units between adjacent rows on the Z axis. */
   rowSpacing: number;
-  /** World units between adjacent columns on the X axis. */
-  colSpacing: number;
+  /** Column spacing on X for the road band (signedCol −1, 0, +1). */
+  roadColSpacing: number;
+  /** Column spacing on X from signedCol ±1 outward. */
+  landscapeColSpacing: number;
 }
 
 /**
  * A static, world-space mesh segment baked from procedural samples. The
  * geometry is expressed in the chunk's local frame:
  *
- *   X_local = signedCol · colSpacing + (Φ(absRow) − Φ(rowStart))
+ *   X_local = worldXForSignedCol(signedCol, roadColSpacing, landscapeColSpacing)
+ *             + (Φ(absRow) − Φ(rowStart))
  *   Y_local = world.depth.sample(absRow, signedCol) — asphalt cols share col-0 height
  *   Z_local = −(absRow − rowStart) · rowSpacing
  *
@@ -62,7 +66,7 @@ interface RowVerts {
  * world root finishes the job.
  */
 export function bakeChunk(world: World, chunkIndex: number, params: ChunkParams): BakedChunk {
-  const { rowsPerChunk, cols: rawCols, rowSpacing, colSpacing } = params;
+  const { rowsPerChunk, cols: rawCols, rowSpacing, roadColSpacing, landscapeColSpacing } = params;
   if (rowsPerChunk <= 0) {
     throw new RangeError(`bakeChunk: rowsPerChunk must be > 0, got ${rowsPerChunk}`);
   }
@@ -95,7 +99,7 @@ export function bakeChunk(world: World, chunkIndex: number, params: ChunkParams)
 
     for (let c = 0; c < cols; c++) {
       const signedCol = c - centreCol;
-      const x = signedCol * colSpacing + phiLocal;
+      const x = worldXForSignedCol(signedCol, roadColSpacing, landscapeColSpacing) + phiLocal;
       const y = world.depth.sample(absRow, signedCol);
       const side = signedCol < 0 ? 'left' : 'right';
 

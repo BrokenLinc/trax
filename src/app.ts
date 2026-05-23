@@ -248,15 +248,21 @@ export class App {
   }
 
   getMode7DefaultsSnapshot(): Mode7DefaultsSnapshot {
+    const terrain = this.terrain.getParams();
     return {
       depth: { ...this.world.depth.getParams() },
       bend: { ...this.world.bend.getParams() },
       camera: { ...this.camera.getParams() },
       fog: { ...this.sceneFog.getParams() },
+      terrain: {
+        rowSpacing: terrain.rowSpacing,
+        roadColSpacing: terrain.roadColSpacing,
+        landscapeColSpacing: terrain.landscapeColSpacing,
+      },
     };
   }
 
-  /** Pasteable block for `src/mode7Defaults.ts` (depth, bend, chase camera, fog). */
+  /** Pasteable block for `src/mode7Defaults.ts` (depth, bend, chase camera, fog, terrain). */
   mode7DefaultsSnippet(): string {
     return formatMode7DefaultsModuleSnippet(this.getMode7DefaultsSnapshot());
   }

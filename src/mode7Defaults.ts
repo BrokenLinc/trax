@@ -5,6 +5,13 @@ import type { DepthMapParams } from './world/depthMap.ts';
 import type { WorldParams } from './world/world.ts';
 // Paste over MODE7_DEFAULTS and DEFAULT_WORLD_PARAMS in src/mode7Defaults.ts
 
+/** Mesh lattice spacing knobs (row + road/landscape column spacing). */
+export interface TerrainMeshSpacingParams {
+  rowSpacing: number;
+  roadColSpacing: number;
+  landscapeColSpacing: number;
+}
+
 /**
  * Single source of truth for tunable procedural + chase-camera defaults exposed
  * in the debug UI. Promote live values via `formatMode7DefaultsModuleSnippet`.
@@ -14,6 +21,7 @@ export const MODE7_DEFAULTS: {
   bend: BendFieldParams;
   camera: ChaseCameraParams;
   fog: SceneFogParams;
+  terrain: TerrainMeshSpacingParams;
 } = {
   depth: {
     // Broader, gentler hills: lower frequency stretches features, fewer octaves
@@ -48,6 +56,11 @@ export const MODE7_DEFAULTS: {
     near: 181.5,
     far: 463,
   },
+  terrain: {
+    rowSpacing: 4,
+    roadColSpacing: 4,
+    landscapeColSpacing: 4,
+  },
 };
 
 export const DEFAULT_WORLD_PARAMS: WorldParams = {
@@ -61,6 +74,7 @@ export type Mode7DefaultsSnapshot = {
   bend: BendFieldParams;
   camera: ChaseCameraParams;
   fog: SceneFogParams;
+  terrain: TerrainMeshSpacingParams;
 };
 
 function numLiteral(n: number): string {
@@ -117,6 +131,14 @@ function formatFogInner(p: SceneFogParams): string {
   ].join('\n');
 }
 
+function formatTerrainInner(p: TerrainMeshSpacingParams): string {
+  return [
+    `    rowSpacing: ${numLiteral(p.rowSpacing)},`,
+    `    roadColSpacing: ${numLiteral(p.roadColSpacing)},`,
+    `    landscapeColSpacing: ${numLiteral(p.landscapeColSpacing)},`,
+  ].join('\n');
+}
+
 function formatDefaultsExportsBlock(live: Mode7DefaultsSnapshot): string {
   const body = [
     `  depth: {`,
@@ -131,6 +153,9 @@ function formatDefaultsExportsBlock(live: Mode7DefaultsSnapshot): string {
     `  fog: {`,
     formatFogInner(live.fog),
     `  },`,
+    `  terrain: {`,
+    formatTerrainInner(live.terrain),
+    `  },`,
   ].join('\n');
 
   return [
@@ -143,6 +168,7 @@ function formatDefaultsExportsBlock(live: Mode7DefaultsSnapshot): string {
     `  bend: BendFieldParams;`,
     `  camera: ChaseCameraParams;`,
     `  fog: SceneFogParams;`,
+    `  terrain: TerrainMeshSpacingParams;`,
     `} = {`,
     body,
     `};`,

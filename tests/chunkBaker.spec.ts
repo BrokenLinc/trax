@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cumulativeOffsetAt } from '../src/render/bendMath.ts';
 import { bakeChunk, type ChunkParams } from '../src/render/chunkBaker.ts';
+import { worldXForSignedCol } from '../src/render/meshLattice.ts';
 import { asphaltSideForQuad, isAsphaltQuad, uvForSurface } from '../src/render/terrainSurface.ts';
 import { World } from '../src/world/world.ts';
 
@@ -8,7 +9,8 @@ const PARAMS: ChunkParams = {
   rowsPerChunk: 8,
   cols: 5,
   rowSpacing: 1.0,
-  colSpacing: 0.6,
+  roadColSpacing: 0.6,
+  landscapeColSpacing: 0.6,
 };
 
 function positions(geometry: ReturnType<typeof bakeChunk>['geometry']): Float32Array {
@@ -57,7 +59,7 @@ function logicalCorner(
   const signedCol = c - centre;
   const absRow = chunk.rowStart + r;
   const phi = cumulativeOffsetAt(absRow, chunk.rowStart, chunk.bends, chunk.prefix);
-  const x = signedCol * params.colSpacing + phi;
+  const x = worldXForSignedCol(signedCol, params.roadColSpacing, params.landscapeColSpacing) + phi;
   const y = world.depth.sample(absRow, signedCol);
   const z = -r * params.rowSpacing;
   return [x, y, z];
@@ -68,7 +70,7 @@ function vertsPerRow(cols: number): number {
 }
 
 describe('bakeChunk — geometry parity', () => {
-  it('places vertices at the formula X = signedCol·colSpacing + Φ_local, Y = depth(row, col), Z = −r·rowSpacing', () => {
+  it('places vertices at worldXForSignedCol + Φ_local, Y = depth(row, col), Z = −r·rowSpacing', () => {
     const world = new World('chunkBakerSpec');
     const chunk = bakeChunk(world, 0, PARAMS);
     const cols = PARAMS.cols % 2 === 0 ? PARAMS.cols + 1 : PARAMS.cols;
@@ -80,6 +82,23 @@ describe('bakeChunk — geometry parity', () => {
         expect(hits.length).toBeGreaterThan(0);
       }
     }
+  });
+
+  it('uses road vs landscape column spacing for X when they differ', () => {
+    const world = new World('splitSpacing');
+    const params: ChunkParams = {
+      ...PARAMS,
+      roadColSpacing: 1,
+      landscapeColSpacing: 3,
+    };
+    const chunk = bakeChunk(world, 0, params);
+    const cols = params.cols % 2 === 0 ? params.cols + 1 : params.cols;
+    const centre = Math.floor(cols / 2);
+    const signedCol = cols - 1 - centre;
+    const [x] = logicalCorner(world, chunk, params, 0, cols - 1);
+    expect(x - cumulativeOffsetAt(chunk.rowStart, chunk.rowStart, chunk.bends, chunk.prefix)).toBe(
+      worldXForSignedCol(signedCol, 1, 3),
+    );
   });
 
   it('reports phiLocalSpan equal to the sum of in-chunk slopes', () => {
