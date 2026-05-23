@@ -2,6 +2,7 @@ import GUI from 'lil-gui';
 
 import { formatMode7DefaultsModuleSnippet } from '../mode7Defaults.ts';
 import type { ChaseCamera } from '../render/camera.ts';
+import type { SceneFog } from '../render/scene.ts';
 import type { TerrainMesh } from '../render/terrainMesh.ts';
 import type { WaterPlane } from '../render/waterPlane.ts';
 import type { World } from '../world/world.ts';
@@ -16,6 +17,7 @@ import type { TopDownView } from './topdownView.ts';
 export function buildGui(opts: {
   world: World;
   chaseCamera: ChaseCamera;
+  sceneFog: SceneFog;
   terrain: TerrainMesh;
   water: WaterPlane;
   debugDraw: DebugDraw;
@@ -43,7 +45,28 @@ export function buildGui(opts: {
     .onChange((v: boolean) => opts.onTopdownWorldSpace(v));
 
   const wp = opts.water.getParams();
-  visuals.add(wp, 'y', -60, 30, 0.5).name('water height').onChange(() => opts.water.setParams(wp));
+  visuals
+    .add(wp, 'y', -60, 30, 0.5)
+    .name('water height')
+    .onChange(() => opts.water.setParams(wp));
+
+  const fog = gui.addFolder('fog');
+  const fp = opts.sceneFog.getParams();
+  const fogGui = {
+    color: `#${(fp.color >>> 0).toString(16).padStart(6, '0')}`,
+    near: fp.near,
+    far: fp.far,
+  };
+  const syncFog = (): void => {
+    opts.sceneFog.setParams({
+      color: Number.parseInt(fogGui.color.slice(1), 16),
+      near: fogGui.near,
+      far: fogGui.far,
+    });
+  };
+  fog.addColor(fogGui, 'color').onChange(syncFog);
+  fog.add(fogGui, 'near', 0, 200, 0.5).onChange(syncFog);
+  fog.add(fogGui, 'far', 1, 500, 1).onChange(syncFog);
 
   // Slider ranges are biased toward the smooth aesthetic of MODE7_DEFAULTS;
   // headroom is preserved at the upper end for users who want to crank up the
@@ -55,13 +78,19 @@ export function buildGui(opts: {
   depth.add(dp, 'octaves', 1, 10, 1).onChange(() => opts.world.depth.setParams(dp));
   depth.add(dp, 'lacunarity', 1.5, 3, 0.05).onChange(() => opts.world.depth.setParams(dp));
   depth.add(dp, 'gain', 0.1, 2, 0.01).onChange(() => opts.world.depth.setParams(dp));
-  depth.add(dp, 'roadFlatColumns', 0, 16, 1).onChange(() => opts.world.depth.setParams(dp));
-  depth.add(dp, 'roadFlatStrength', 0, 1, 0.01).onChange(() => opts.world.depth.setParams(dp));
+  depth
+    .add(dp, 'roadDatumPull', 0, 1, 0.01)
+    .name('datum pull')
+    .onChange(() => opts.world.depth.setParams(dp));
+  depth
+    .add(dp, 'shoulderBlendColumns', 0, 16, 1)
+    .name('shoulder blend cols')
+    .onChange(() => opts.world.depth.setParams(dp));
 
   const bend = gui.addFolder('bend field');
   const bp = opts.world.bend.getParams();
-  bend.add(bp, 'frequency', 0.001, 0.03, 0.001).onChange(() => opts.world.bend.setParams(bp));
-  bend.add(bp, 'amplitude', 0, 5, 0.01).onChange(() => opts.world.bend.setParams(bp));
+  bend.add(bp, 'frequency', 0.001, 0.1, 0.001).onChange(() => opts.world.bend.setParams(bp));
+  bend.add(bp, 'amplitude', 0, 10, 0.01).onChange(() => opts.world.bend.setParams(bp));
   bend.add(bp, 'detailWeight', 0, 0.5, 0.01).onChange(() => opts.world.bend.setParams(bp));
   bend.add(bp, 'detailFrequency', 0.005, 0.3, 0.005).onChange(() => opts.world.bend.setParams(bp));
 
@@ -81,6 +110,7 @@ export function buildGui(opts: {
         depth: opts.world.depth.getParams(),
         bend: opts.world.bend.getParams(),
         camera: opts.chaseCamera.getParams(),
+        fog: opts.sceneFog.getParams(),
       });
       const copy = async (): Promise<void> => {
         try {

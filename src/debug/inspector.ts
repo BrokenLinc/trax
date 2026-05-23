@@ -74,7 +74,7 @@ export interface Mode7Inspector {
   dumpMesh(): Mode7MeshDump;
   /** Snapshot world params + a slice of bend/depth samples around the player. */
   dumpWorld(opts?: { rowsAhead?: number; rowsBehind?: number }): Mode7WorldDump;
-  /** JSON snapshot of depth, bend, and chase camera params (GUI + defaults source). */
+  /** JSON snapshot of depth, bend, chase camera, and fog params (GUI + defaults source). */
   getMode7DefaultsSnapshot(): Mode7DefaultsSnapshot;
   /** Pasteable snippet for `MODE7_DEFAULTS` / `DEFAULT_WORLD_PARAMS` in `src/mode7Defaults.ts`. */
   mode7DefaultsSnippet(): string;

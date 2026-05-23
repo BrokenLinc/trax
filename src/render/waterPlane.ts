@@ -8,7 +8,7 @@ export interface WaterPlaneParams {
 }
 
 export const DEFAULT_WATER_PLANE: WaterPlaneParams = {
-  y: -4,
+  y: -17,
   size: 512,
 };
 

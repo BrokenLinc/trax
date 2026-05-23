@@ -1,4 +1,5 @@
 import type { ChaseCameraParams } from './render/camera.ts';
+import type { SceneFogParams } from './render/scene.ts';
 import type { BendFieldParams } from './world/bendField.ts';
 import type { DepthMapParams } from './world/depthMap.ts';
 import type { WorldParams } from './world/world.ts';
@@ -12,25 +13,26 @@ export const MODE7_DEFAULTS: {
   depth: DepthMapParams;
   bend: BendFieldParams;
   camera: ChaseCameraParams;
+  fog: SceneFogParams;
 } = {
   depth: {
     // Broader, gentler hills: lower frequency stretches features, fewer octaves
     // and lower gain strip out the high-frequency crinkles.
-    frequency: 0.01,
+    frequency: 0.005,
     amplitude: 50,
     octaves: 3,
     lacunarity: 1.5,
     gain: 2,
-    roadFlatColumns: 6,
-    roadFlatStrength: 0.5,
+    roadDatumPull: 0.5,
+    shoulderBlendColumns: 5,
   },
   bend: {
     // Longer sweeping curves with a small amplitude — gentle winding rather
     // than switchbacks. Per-row slope is the dominant turbulence knob.
-    frequency: 0.03,
-    amplitude: 5,
-    detailWeight: 0.05,
-    detailFrequency: 0.08,
+    frequency: 0.005,
+    amplitude: 3.84,
+    detailWeight: 0,
+    detailFrequency: 0.005,
   },
   camera: {
     aheadMeters: 24,
@@ -40,6 +42,11 @@ export const MODE7_DEFAULTS: {
     fov: 60,
     near: 0.1,
     far: 200,
+  },
+  fog: {
+    color: 0x0a0d18,
+    near: 181.5,
+    far: 463,
   },
 };
 
@@ -53,11 +60,16 @@ export type Mode7DefaultsSnapshot = {
   depth: DepthMapParams;
   bend: BendFieldParams;
   camera: ChaseCameraParams;
+  fog: SceneFogParams;
 };
 
 function numLiteral(n: number): string {
   if (Number.isInteger(n)) return String(n);
   return String(n);
+}
+
+function hexLiteral(n: number): string {
+  return `0x${(n >>> 0).toString(16).padStart(6, '0')}`;
 }
 
 function formatDepthInner(p: DepthMapParams): string {
@@ -69,8 +81,8 @@ function formatDepthInner(p: DepthMapParams): string {
     `    octaves: ${numLiteral(p.octaves)},`,
     `    lacunarity: ${numLiteral(p.lacunarity)},`,
     `    gain: ${numLiteral(p.gain)},`,
-    `    roadFlatColumns: ${numLiteral(p.roadFlatColumns)},`,
-    `    roadFlatStrength: ${numLiteral(p.roadFlatStrength)},`,
+    `    roadDatumPull: ${numLiteral(p.roadDatumPull)},`,
+    `    shoulderBlendColumns: ${numLiteral(p.shoulderBlendColumns)},`,
   ].join('\n');
 }
 
@@ -97,6 +109,14 @@ function formatCameraInner(p: ChaseCameraParams): string {
   ].join('\n');
 }
 
+function formatFogInner(p: SceneFogParams): string {
+  return [
+    `    color: ${hexLiteral(p.color)},`,
+    `    near: ${numLiteral(p.near)},`,
+    `    far: ${numLiteral(p.far)},`,
+  ].join('\n');
+}
+
 function formatDefaultsExportsBlock(live: Mode7DefaultsSnapshot): string {
   const body = [
     `  depth: {`,
@@ -107,6 +127,9 @@ function formatDefaultsExportsBlock(live: Mode7DefaultsSnapshot): string {
     `  },`,
     `  camera: {`,
     formatCameraInner(live.camera),
+    `  },`,
+    `  fog: {`,
+    formatFogInner(live.fog),
     `  },`,
   ].join('\n');
 
@@ -119,6 +142,7 @@ function formatDefaultsExportsBlock(live: Mode7DefaultsSnapshot): string {
     `  depth: DepthMapParams;`,
     `  bend: BendFieldParams;`,
     `  camera: ChaseCameraParams;`,
+    `  fog: SceneFogParams;`,
     `} = {`,
     body,
     `};`,

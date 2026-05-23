@@ -19,7 +19,7 @@ export interface ChunkParams {
  * geometry is expressed in the chunk's local frame:
  *
  *   X_local = signedCol · colSpacing + (Φ(absRow) − Φ(rowStart))
- *   Y_local = world.depth.sample(absRow, signedCol)
+ *   Y_local = world.depth.sample(absRow, signedCol) — asphalt cols share col-0 height
  *   Z_local = −(absRow − rowStart) · rowSpacing
  *
  * Chunks neighbour seamlessly: chunk N's last vertex row (row `rowEnd`) is

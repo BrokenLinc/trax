@@ -14,12 +14,15 @@ export interface DepthMapParams {
   /** FBM gain (amplitude shrink per octave). */
   gain: number;
   /**
-   * Width of the road (in columns) over which depth is gently flattened
-   * toward zero so the road surface stays drivable. 0 disables flattening.
+   * Pulls the road centerline toward Y = 0 (1 = flat datum at centre).
+   * Asphalt columns −1, 0, +1 share the centerline height.
    */
-  roadFlatColumns: number;
-  /** How aggressively to flatten near the road centre. */
-  roadFlatStrength: number;
+  roadDatumPull: number;
+  /**
+   * Columns beyond the asphalt band (|col| > 1) over which height eases from
+   * the centerline to natural terrain. 0 jumps to natural at |col| = 2.
+   */
+  shoulderBlendColumns: number;
 }
 
 /** @see MODE7_DEFAULTS.depth in `src/mode7Defaults.ts` */
@@ -57,13 +60,16 @@ export class DepthMap {
   /** Height at a single lattice point. */
   sample(row: number, col: number): number {
     const p = this.params;
-    const raw = fbm2D(this.noise, row * p.frequency, col * p.frequency, {
-      octaves: p.octaves,
-      lacunarity: p.lacunarity,
-      gain: p.gain,
-    });
-    const flatten = roadFlattenFactor(col, p.roadFlatColumns, p.roadFlatStrength);
-    return raw * p.amplitude * flatten;
+    const rawAtCol = this.rawFbm(row, col);
+    const natural = rawAtCol * p.amplitude;
+    const centerline = this.rawFbm(row, 0) * p.amplitude * (1 - p.roadDatumPull);
+
+    if (Math.abs(col) <= 1) return centerline;
+
+    const dist = Math.abs(col) - 1;
+    const t = p.shoulderBlendColumns <= 0 ? 1 : Math.min(1, dist / p.shoulderBlendColumns);
+    const ease = 0.5 - 0.5 * Math.cos(Math.PI * t);
+    return centerline + ease * (natural - centerline);
   }
 
   /**
@@ -81,16 +87,13 @@ export class DepthMap {
     const d = this.sample(r0 + 1, c0 + 1);
     return a * (1 - fr) * (1 - fc) + b * fr * (1 - fc) + c * (1 - fr) * fc + d * fr * fc;
   }
-}
 
-/**
- * Returns a 0..1 multiplier that suppresses height near the road centre
- * so the player has a navigable surface. Cosine falloff over `width` columns
- * either side, scaled by `strength` (1 = full flatten at centre).
- */
-function roadFlattenFactor(col: number, width: number, strength: number): number {
-  if (width <= 0 || strength <= 0) return 1;
-  const t = Math.min(1, Math.abs(col) / width);
-  const ease = 0.5 - 0.5 * Math.cos(Math.PI * t);
-  return 1 - strength * (1 - ease);
+  private rawFbm(row: number, col: number): number {
+    const p = this.params;
+    return fbm2D(this.noise, row * p.frequency, col * p.frequency, {
+      octaves: p.octaves,
+      lacunarity: p.lacunarity,
+      gain: p.gain,
+    });
+  }
 }

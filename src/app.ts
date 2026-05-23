@@ -3,7 +3,7 @@ import type GUI from 'lil-gui';
 
 import { World } from './world/world.ts';
 import { ChaseCamera, diagnosticChaseVersusThreeLookAtDeg } from './render/camera.ts';
-import { createScene } from './render/scene.ts';
+import { createScene, SceneFog } from './render/scene.ts';
 import { TerrainMesh, type TerrainSnapshot } from './render/terrainMesh.ts';
 import { PlayerMesh } from './render/playerMesh.ts';
 import { WaterPlane } from './render/waterPlane.ts';
@@ -50,6 +50,7 @@ export class App {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly camera: ChaseCamera;
   private readonly scene: THREE.Scene;
+  private readonly sceneFog: SceneFog;
   private readonly terrain: TerrainMesh;
   private readonly playerMesh: PlayerMesh;
   private readonly water: WaterPlane;
@@ -95,6 +96,7 @@ export class App {
 
     const rig = createScene();
     this.scene = rig.scene;
+    this.sceneFog = new SceneFog(this.scene);
 
     this.world = new World(opts.seed);
     this.water = new WaterPlane();
@@ -125,6 +127,7 @@ export class App {
       : buildGui({
           world: this.world,
           chaseCamera: this.camera,
+          sceneFog: this.sceneFog,
           terrain: this.terrain,
           water: this.water,
           debugDraw: this.debugDraw,
@@ -249,10 +252,11 @@ export class App {
       depth: { ...this.world.depth.getParams() },
       bend: { ...this.world.bend.getParams() },
       camera: { ...this.camera.getParams() },
+      fog: { ...this.sceneFog.getParams() },
     };
   }
 
-  /** Pasteable block for `src/mode7Defaults.ts` (depth, bend, chase camera). */
+  /** Pasteable block for `src/mode7Defaults.ts` (depth, bend, chase camera, fog). */
   mode7DefaultsSnippet(): string {
     return formatMode7DefaultsModuleSnippet(this.getMode7DefaultsSnapshot());
   }
