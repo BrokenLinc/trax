@@ -1,9 +1,9 @@
 import type { ChaseCameraParams } from './render/camera.ts';
 import type { SceneFogParams } from './render/scene.ts';
+import type { WaterParams } from './render/waterPlane.ts';
 import type { BendFieldParams } from './world/bendField.ts';
 import type { DepthMapParams } from './world/depthMap.ts';
 import type { WorldParams } from './world/world.ts';
-// Paste over MODE7_DEFAULTS and DEFAULT_WORLD_PARAMS in src/mode7Defaults.ts
 
 /** Mesh lattice spacing knobs (row + road/landscape column spacing). */
 export interface TerrainMeshSpacingParams {
@@ -11,6 +11,8 @@ export interface TerrainMeshSpacingParams {
   roadColSpacing: number;
   landscapeColSpacing: number;
 }
+
+// Paste over MODE7_DEFAULTS and DEFAULT_WORLD_PARAMS in src/mode7Defaults.ts
 
 /**
  * Single source of truth for tunable procedural + chase-camera defaults exposed
@@ -22,16 +24,17 @@ export const MODE7_DEFAULTS: {
   camera: ChaseCameraParams;
   fog: SceneFogParams;
   terrain: TerrainMeshSpacingParams;
+  water: WaterParams;
 } = {
   depth: {
     // Broader, gentler hills: lower frequency stretches features, fewer octaves
     // and lower gain strip out the high-frequency crinkles.
-    frequency: 0.005,
-    amplitude: 50,
+    frequency: 0.002,
+    amplitude: 320.85,
     octaves: 3,
     lacunarity: 1.5,
     gain: 2,
-    roadDatumPull: 0.5,
+    roadDatumPull: 0.3,
     shoulderBlendColumns: 5,
   },
   bend: {
@@ -43,23 +46,26 @@ export const MODE7_DEFAULTS: {
     detailFrequency: 0.005,
   },
   camera: {
-    aheadMeters: 24,
+    aheadMeters: 80,
     aimElevation: 1,
     height: 2.6,
     back: 6.5,
     fov: 60,
     near: 0.1,
-    far: 200,
+    far: 1051,
   },
   fog: {
     color: 0x0a0d18,
-    near: 181.5,
-    far: 463,
+    near: 0,
+    far: 1137,
   },
   terrain: {
     rowSpacing: 4,
-    roadColSpacing: 4,
-    landscapeColSpacing: 4,
+    roadColSpacing: 6,
+    landscapeColSpacing: 50,
+  },
+  water: {
+    y: -147.5,
   },
 };
 
@@ -75,6 +81,7 @@ export type Mode7DefaultsSnapshot = {
   camera: ChaseCameraParams;
   fog: SceneFogParams;
   terrain: TerrainMeshSpacingParams;
+  water: WaterParams;
 };
 
 function numLiteral(n: number): string {
@@ -139,6 +146,10 @@ function formatTerrainInner(p: TerrainMeshSpacingParams): string {
   ].join('\n');
 }
 
+function formatWaterInner(p: WaterParams): string {
+  return [`    y: ${numLiteral(p.y)},`].join('\n');
+}
+
 function formatDefaultsExportsBlock(live: Mode7DefaultsSnapshot): string {
   const body = [
     `  depth: {`,
@@ -156,6 +167,9 @@ function formatDefaultsExportsBlock(live: Mode7DefaultsSnapshot): string {
     `  terrain: {`,
     formatTerrainInner(live.terrain),
     `  },`,
+    `  water: {`,
+    formatWaterInner(live.water),
+    `  },`,
   ].join('\n');
 
   return [
@@ -169,6 +183,7 @@ function formatDefaultsExportsBlock(live: Mode7DefaultsSnapshot): string {
     `  camera: ChaseCameraParams;`,
     `  fog: SceneFogParams;`,
     `  terrain: TerrainMeshSpacingParams;`,
+    `  water: WaterParams;`,
     `} = {`,
     body,
     `};`,

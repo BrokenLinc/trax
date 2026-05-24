@@ -13,8 +13,18 @@ describe('DepthMap', () => {
   });
 
   it('decorrelates between different seeds', () => {
-    const a = new DepthMap('alpha');
-    const b = new DepthMap('beta');
+    /** Pin params so GUI/default tuning does not shrink the sample grid's spread. */
+    const params = {
+      frequency: 0.02,
+      amplitude: 50,
+      octaves: 3,
+      lacunarity: 1.5,
+      gain: 2,
+      roadDatumPull: 0.5,
+      shoulderBlendColumns: 5,
+    };
+    const a = new DepthMap('alpha', params);
+    const b = new DepthMap('beta', params);
     let differences = 0;
     for (let r = -20; r <= 20; r++) {
       for (let c = -20; c <= 20; c++) {

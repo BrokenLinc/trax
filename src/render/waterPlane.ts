@@ -1,15 +1,23 @@
 import * as THREE from 'three';
+import { MODE7_DEFAULTS } from '../mode7Defaults.ts';
 
-export interface WaterPlaneParams {
+/** Tunable sea level exposed in MODE7_DEFAULTS / the debug UI. */
+export interface WaterParams {
   /** Fixed sea level in scene space (metres). Below flattened road datum (~0). */
   y: number;
+}
+
+export interface WaterPlaneParams extends WaterParams {
   /** Edge length of the square plane in world units. */
   size: number;
 }
 
+/** @see MODE7_DEFAULTS.water in `src/mode7Defaults.ts` */
+export const DEFAULT_WATER_PARAMS: WaterParams = MODE7_DEFAULTS.water;
+
 export const DEFAULT_WATER_PLANE: WaterPlaneParams = {
-  y: -17,
-  size: 512,
+  ...DEFAULT_WATER_PARAMS,
+  size: 2048,
 };
 
 /**

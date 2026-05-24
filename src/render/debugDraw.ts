@@ -12,7 +12,7 @@ export class DebugDraw {
   readonly group = new THREE.Group();
   private readonly centreLine: THREE.Line;
   private readonly centreGeom: THREE.BufferGeometry;
-  private readonly centreLen: number;
+  private centreLen: number;
   private readonly aimSphere: THREE.Mesh;
   private visible = true;
 
@@ -43,6 +43,17 @@ export class DebugDraw {
     );
     this.aimSphere.frustumCulled = false;
     this.group.add(this.aimSphere);
+  }
+
+  /** Match the terrain inspector bend window when `rowsAhead` / `rowsBehind` change. */
+  setRowCount(rowCount: number): void {
+    if (rowCount === this.centreLen) return;
+    this.centreLen = rowCount;
+    this.centreGeom.dispose();
+    const positions = new Float32Array(rowCount * 3);
+    const attr = new THREE.BufferAttribute(positions, 3);
+    attr.setUsage(THREE.DynamicDrawUsage);
+    this.centreGeom.setAttribute('position', attr);
   }
 
   setVisible(on: boolean): void {

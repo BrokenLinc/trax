@@ -46,7 +46,7 @@ export function buildGui(opts: {
 
   const wp = opts.water.getParams();
   visuals
-    .add(wp, 'y', -60, 30, 0.5)
+    .add(wp, 'y', -200, 30, 0.5)
     .name('water height')
     .onChange(() => opts.water.setParams(wp));
 
@@ -66,7 +66,7 @@ export function buildGui(opts: {
   };
   fog.addColor(fogGui, 'color').onChange(syncFog);
   fog.add(fogGui, 'near', 0, 200, 0.5).onChange(syncFog);
-  fog.add(fogGui, 'far', 1, 500, 1).onChange(syncFog);
+  fog.add(fogGui, 'far', 1, 2000, 1).onChange(syncFog);
 
   // Slider ranges are biased toward the smooth aesthetic of MODE7_DEFAULTS;
   // headroom is preserved at the upper end for users who want to crank up the
@@ -74,7 +74,7 @@ export function buildGui(opts: {
   const depth = gui.addFolder('depth map');
   const dp = opts.world.depth.getParams();
   depth.add(dp, 'frequency', 0.001, 2, 0.001).onChange(() => opts.world.depth.setParams(dp));
-  depth.add(dp, 'amplitude', 0, 200, 0.05).onChange(() => opts.world.depth.setParams(dp));
+  depth.add(dp, 'amplitude', 0, 500, 0.05).onChange(() => opts.world.depth.setParams(dp));
   depth.add(dp, 'octaves', 1, 10, 1).onChange(() => opts.world.depth.setParams(dp));
   depth.add(dp, 'lacunarity', 1.5, 3, 0.05).onChange(() => opts.world.depth.setParams(dp));
   depth.add(dp, 'gain', 0.1, 2, 0.01).onChange(() => opts.world.depth.setParams(dp));
@@ -99,7 +99,7 @@ export function buildGui(opts: {
   mesh.add(tp, 'rowSpacing', 0.5, 16, 0.25).name('row spacing').onChange(syncMesh);
   mesh.add(tp, 'roadColSpacing', 0.5, 16, 0.25).name('road col spacing').onChange(syncMesh);
   mesh
-    .add(tp, 'landscapeColSpacing', 0.5, 24, 0.25)
+    .add(tp, 'landscapeColSpacing', 0.5, 50, 0.25)
     .name('landscape col spacing')
     .onChange(syncMesh);
 
@@ -133,6 +133,7 @@ export function buildGui(opts: {
           roadColSpacing: terrainParams.roadColSpacing,
           landscapeColSpacing: terrainParams.landscapeColSpacing,
         },
+        water: { y: opts.water.getParams().y },
       });
       const copy = async (): Promise<void> => {
         try {

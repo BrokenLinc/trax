@@ -31,12 +31,17 @@ export interface TerrainParams {
   rowsPerChunk: number;
 }
 
+/** Row count ahead of the player that covers `MODE7_DEFAULTS.camera.far` metres. */
+function streamRowsAhead(rowSpacing: number): number {
+  return Math.ceil(MODE7_DEFAULTS.camera.far / rowSpacing);
+}
+
 export const DEFAULT_TERRAIN: TerrainParams = {
-  rowsAhead: 60,
+  rowsAhead: streamRowsAhead(MODE7_DEFAULTS.terrain.rowSpacing),
   rowsBehind: 14,
-  cols: 33,
+  cols: 64,
   ...MODE7_DEFAULTS.terrain,
-  rowsPerChunk: 32,
+  rowsPerChunk: 64,
 };
 
 export interface TerrainSnapshot {
@@ -68,11 +73,12 @@ export class TerrainMesh {
   private readonly material: THREE.MeshStandardMaterial;
   private readonly surfaceTexture: THREE.DataTexture;
   private readonly wireMaterial: THREE.MeshBasicMaterial;
-  private readonly bends: Float32Array;
-  private readonly prefix: Float32Array;
-  private readonly offsets: Float32Array;
+  private bends: Float32Array;
+  private prefix: Float32Array;
+  private offsets: Float32Array;
   private params: TerrainParams;
   private rowCount: number;
+  private rowCountSink: ((rowCount: number) => void) | undefined;
   private windowRowStart = 0;
   private wireframe = false;
   private world: World;
@@ -126,8 +132,21 @@ export class TerrainMesh {
     return this.params;
   }
 
+  /** Called when `rowsAhead` / `rowsBehind` resize the inspector bend window. */
+  setRowCountSink(sink: ((rowCount: number) => void) | null): void {
+    this.rowCountSink = sink ?? undefined;
+  }
+
   setParams(partial: Partial<TerrainParams>): void {
     this.params = sanitiseParams({ ...this.params, ...partial });
+    const newRowCount = this.params.rowsAhead + this.params.rowsBehind + 1;
+    if (newRowCount !== this.rowCount) {
+      this.rowCount = newRowCount;
+      this.bends = new Float32Array(this.rowCount);
+      this.prefix = new Float32Array(this.rowCount + 1);
+      this.offsets = new Float32Array(this.rowCount);
+      this.rowCountSink?.(this.rowCount);
+    }
     this.streamer.setParams({
       rowsPerChunk: this.params.rowsPerChunk,
       cols: this.params.cols,

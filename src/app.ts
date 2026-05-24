@@ -110,6 +110,7 @@ export class App {
 
     this.debugDraw = new DebugDraw(this.terrain.getRowCount());
     this.scene.add(this.debugDraw.group);
+    this.terrain.setRowCountSink((n) => this.debugDraw.setRowCount(n));
 
     this.camera = new ChaseCamera(1);
     this.syncRendererSize();
@@ -259,10 +260,11 @@ export class App {
         roadColSpacing: terrain.roadColSpacing,
         landscapeColSpacing: terrain.landscapeColSpacing,
       },
+      water: { y: this.water.getParams().y },
     };
   }
 
-  /** Pasteable block for `src/mode7Defaults.ts` (depth, bend, chase camera, fog, terrain). */
+  /** Pasteable block for `src/mode7Defaults.ts` (depth, bend, chase camera, fog, terrain, water). */
   mode7DefaultsSnippet(): string {
     return formatMode7DefaultsModuleSnippet(this.getMode7DefaultsSnapshot());
   }
