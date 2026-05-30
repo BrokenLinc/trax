@@ -66,6 +66,7 @@ export interface Mode7Inspector {
   setSeed(seed: string): void;
   setDistance(distance: number): void;
   setSpeed(speed: number): void;
+  setLateralX(lateralX: number): void;
   setPaused(paused: boolean): void;
   setHeadless(headless: boolean): void;
   /** Advance `frames` frames using a fixed `dt` per frame (default 1/60). */
@@ -92,6 +93,7 @@ export interface Mode7State {
   seed: string;
   distance: number;
   speed: number;
+  lateralX: number;
   playerY: number;
   fps: number;
   paused: boolean;
@@ -129,6 +131,7 @@ export function installInspector(app: App): Mode7Inspector {
     setSeed: (seed) => app.setSeed(seed),
     setDistance: (d) => app.setDistance(d),
     setSpeed: (s) => app.setSpeed(s),
+    setLateralX: (x) => app.setLateralX(x),
     setPaused: (p) => app.setPaused(p),
     setHeadless: (h) => app.setHeadless(h),
     tick: (frames = 1, dt = 1 / 60) => app.tick(frames, dt),

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { signedColFromWorldX } from './meshLattice.ts';
 import type { World } from '../world/world.ts';
 
 export interface PlayerMeshParams {
@@ -42,10 +43,17 @@ export class PlayerMesh {
     this.mesh.castShadow = true;
   }
 
-  /** Place the sphere for the current frame at the road centreline height. */
-  update(distance: number, world: World): void {
-    const centreY = world.depth.sampleBilinear(distance, 0);
-    this.mesh.position.set(0, centreY + this.params.radius, 0);
+  /** Place the sphere at the depth sample under the player's lateral offset. */
+  update(
+    distance: number,
+    world: World,
+    lateralX: number,
+    roadColSpacing: number,
+    landscapeColSpacing: number,
+  ): void {
+    const col = signedColFromWorldX(lateralX, roadColSpacing, landscapeColSpacing);
+    const groundY = world.depth.sampleBilinear(distance, col);
+    this.mesh.position.set(0, groundY + this.params.radius, 0);
     this.mesh.quaternion.identity();
   }
 

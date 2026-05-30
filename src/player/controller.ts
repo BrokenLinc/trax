@@ -1,3 +1,5 @@
+import { MODE7_DEFAULTS } from '../mode7Defaults.ts';
+import type { MeshLateralBounds } from '../render/meshLattice.ts';
 import type { PlayerState } from './state.ts';
 
 export interface ControllerParams {
@@ -9,6 +11,11 @@ export interface ControllerParams {
   friction: number;
   /** Speed cap in either direction (rows/sec). */
   maxSpeed: number;
+  /**
+   * Strafe speed as a fraction of forward world speed (|speed| × rowSpacing).
+   * No strafe when |speed| is zero.
+   */
+  strafeSpeedFactor: number;
 }
 
 export const DEFAULT_CONTROLLER: ControllerParams = {
@@ -16,6 +23,7 @@ export const DEFAULT_CONTROLLER: ControllerParams = {
   decel: 22,
   friction: 6,
   maxSpeed: 30,
+  strafeSpeedFactor: MODE7_DEFAULTS.player.strafeSpeedFactor,
 };
 
 /**
@@ -28,6 +36,8 @@ export const DEFAULT_CONTROLLER: ControllerParams = {
 export class PlayerController {
   forward = false;
   reverse = false;
+  strafeLeft = false;
+  strafeRight = false;
   boost = false;
   /** When true, ignore browser key events (used by headless tests). */
   headless = false;
@@ -51,12 +61,21 @@ export class PlayerController {
     };
   }
 
+  getParams(): ControllerParams {
+    return this.params;
+  }
+
   setParams(params: ControllerParams): void {
     this.params = params;
   }
 
   /** Step the player by `dt` seconds. */
-  update(player: PlayerState, dt: number): void {
+  update(
+    player: PlayerState,
+    dt: number,
+    lateralBounds: MeshLateralBounds,
+    rowSpacing: number,
+  ): void {
     const p = this.params;
     let accel = 0;
     if (this.forward) accel += p.accel * (this.boost ? 1.6 : 1);
@@ -70,6 +89,16 @@ export class PlayerController {
     if (player.speed > p.maxSpeed) player.speed = p.maxSpeed;
     if (player.speed < -p.maxSpeed) player.speed = -p.maxSpeed;
     player.distance += player.speed * dt;
+
+    const strafeDir = (this.strafeRight ? 1 : 0) + (this.strafeLeft ? -1 : 0);
+    if (strafeDir !== 0 && player.speed !== 0) {
+      const strafeSpeed = p.strafeSpeedFactor * Math.abs(player.speed) * rowSpacing;
+      player.lateralX = clamp(
+        player.lateralX + strafeDir * strafeSpeed * dt,
+        lateralBounds.minX,
+        lateralBounds.maxX,
+      );
+    }
   }
 
   private applyKey(code: string, down: boolean): void {
@@ -82,10 +111,22 @@ export class PlayerController {
       case 'ArrowDown':
         this.reverse = down;
         break;
+      case 'KeyA':
+      case 'ArrowLeft':
+        this.strafeLeft = down;
+        break;
+      case 'KeyD':
+      case 'ArrowRight':
+        this.strafeRight = down;
+        break;
       case 'ShiftLeft':
       case 'ShiftRight':
         this.boost = down;
         break;
     }
   }
+}
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, v));
 }

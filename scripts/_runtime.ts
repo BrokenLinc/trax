@@ -57,6 +57,7 @@ export interface Mode7Tunnel {
   setSeed(seed: string): Promise<void>;
   setDistance(d: number): Promise<void>;
   setSpeed(s: number): Promise<void>;
+  setLateralX(x: number): Promise<void>;
   tick(frames?: number, dt?: number): Promise<void>;
   dumpMesh(): Promise<ReturnType<Mode7Inspector['dumpMesh']>>;
   dumpWorld(opts?: {
@@ -74,6 +75,7 @@ function makeTunnel(page: Page): Mode7Tunnel {
     setSeed: (seed) => page.evaluate((s) => window.__MODE7__!.setSeed(s), seed),
     setDistance: (d) => page.evaluate((v) => window.__MODE7__!.setDistance(v), d),
     setSpeed: (s) => page.evaluate((v) => window.__MODE7__!.setSpeed(v), s),
+    setLateralX: (x) => page.evaluate((v) => window.__MODE7__!.setLateralX(v), x),
     tick: (frames = 1, dt = 1 / 60) =>
       page.evaluate((args) => window.__MODE7__!.tick(args.frames, args.dt), { frames, dt }),
     dumpMesh: () => page.evaluate(() => window.__MODE7__!.dumpMesh()),

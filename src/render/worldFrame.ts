@@ -9,7 +9,7 @@ export interface WorldFrameParams {
  * The per-frame coordinate transform that puts the player at the world
  * origin and "unbends" the road's local tangent. Mathematically:
  *
- *   M = Shear_xz(s / rowSpacing)  ·  Translate(−playerWorldX, 0, −playerZ)
+ *   M = Shear_xz(s / rowSpacing)  ·  Translate(−playerWorldX − lateralX, 0, −playerZ)
  *
  * where `s` is the lerp-smoothed tangent slope at the player's fractional
  * row (see `bendMath.ts`), `playerWorldX = Φ(playerRow)` in the streamer's
@@ -40,9 +40,9 @@ export class WorldFrame {
    * Order: streamer first (so the chunk that contains the player is
    * guaranteed present and `getPlayerWorldX` is valid), then matrix.
    */
-  update(playerRow: number): void {
+  update(playerRow: number, lateralX = 0): void {
     this.streamer.update(playerRow);
-    this.refreshMatrix(playerRow);
+    this.refreshMatrix(playerRow, lateralX);
   }
 
   /**
@@ -50,11 +50,11 @@ export class WorldFrame {
    * driving the streamer. Used by the top-down debug view when toggling
    * between world-space and skewed presentations.
    */
-  refreshMatrix(playerRow: number): void {
+  refreshMatrix(playerRow: number, lateralX = 0): void {
     const playerWorldX = this.streamer.getPlayerWorldX(playerRow);
     const playerZ = -playerRow * this.params.rowSpacing;
     const s = this.unskewed ? 0 : this.streamer.getPlayerTangentSlope(playerRow);
-    this.tmpTranslate.makeTranslation(-playerWorldX, 0, -playerZ);
+    this.tmpTranslate.makeTranslation(-playerWorldX - lateralX, 0, -playerZ);
     this.tmpShear.makeShear(0, 0, 0, 0, s / this.params.rowSpacing, 0);
     this.worldRoot.matrix.multiplyMatrices(this.tmpShear, this.tmpTranslate);
     this.worldRoot.matrixWorldNeedsUpdate = true;

@@ -51,8 +51,9 @@ function composeFrameMatrix(
   playerZ: number,
   s: number,
   rowSpacing: number,
+  lateralX = 0,
 ): THREE.Matrix4 {
-  const t = new THREE.Matrix4().makeTranslation(-playerWorldX, 0, -playerZ);
+  const t = new THREE.Matrix4().makeTranslation(-playerWorldX - lateralX, 0, -playerZ);
   const sh = new THREE.Matrix4().makeShear(0, 0, 0, 0, s / rowSpacing, 0);
   return new THREE.Matrix4().multiplyMatrices(sh, t);
 }
@@ -197,6 +198,32 @@ describe('WorldFrame matrix — multi-chunk seam continuity', () => {
     const before = visibleX(seam - eps);
     const after = visibleX(seam + eps);
     expect(before).toBeCloseTo(after, 3);
+  });
+});
+
+describe('WorldFrame — lateral offset', () => {
+  it('column under the player maps to view X ≈ 0 when lateralX matches that column world offset', () => {
+    const world = new World('worldFrameLateral');
+    const chunk = bakeChunk(world, 0, CHUNK_PARAMS);
+    const cols = CHUNK_PARAMS.cols;
+    const centre = Math.floor(cols / 2);
+    const signedCol = 2;
+    const playerRow = 4;
+    const lateralX = worldXForSignedCol(
+      signedCol,
+      CHUNK_PARAMS.roadColSpacing,
+      CHUNK_PARAMS.landscapeColSpacing,
+    );
+    const playerWorldX = cumulativeOffsetAt(playerRow, chunk.rowStart, chunk.bends, chunk.prefix);
+    const playerZ = -playerRow * CHUNK_PARAMS.rowSpacing;
+    const s = tangentSlopeAt(playerRow, chunk.rowStart, chunk.bends);
+    const M = composeFrameMatrix(playerWorldX, playerZ, s, CHUNK_PARAMS.rowSpacing, lateralX);
+
+    const r = playerRow;
+    const v = vertexAtLogical(chunk, CHUNK_PARAMS, r, centre + signedCol)
+      .clone()
+      .applyMatrix4(M);
+    expect(v.x).toBeCloseTo(0, 3);
   });
 });
 

@@ -7,6 +7,7 @@ import type { TerrainMesh } from '../render/terrainMesh.ts';
 import type { WaterPlane } from '../render/waterPlane.ts';
 import type { World } from '../world/world.ts';
 import type { DebugDraw } from '../render/debugDraw.ts';
+import type { PlayerController } from '../player/controller.ts';
 import type { TopDownView } from './topdownView.ts';
 
 /**
@@ -15,6 +16,7 @@ import type { TopDownView } from './topdownView.ts';
  * so callers can hide/destroy it from the inspector.
  */
 export function buildGui(opts: {
+  controller: PlayerController;
   world: World;
   chaseCamera: ChaseCamera;
   sceneFog: SceneFog;
@@ -28,6 +30,13 @@ export function buildGui(opts: {
   onTopdownWorldSpace: (on: boolean) => void;
 }): GUI {
   const gui = new GUI({ title: 'mode7b', width: 300 });
+
+  const player = gui.addFolder('player');
+  const playerParams = opts.controller.getParams();
+  player
+    .add(playerParams, 'strafeSpeedFactor', 0.05, 1.5, 0.01)
+    .name('strafe speed factor')
+    .onChange(() => opts.controller.setParams(playerParams));
 
   const visuals = gui.addFolder('visuals');
   const visState = {
@@ -134,6 +143,7 @@ export function buildGui(opts: {
           landscapeColSpacing: terrainParams.landscapeColSpacing,
         },
         water: { y: opts.water.getParams().y },
+        player: { strafeSpeedFactor: opts.controller.getParams().strafeSpeedFactor },
       });
       const copy = async (): Promise<void> => {
         try {

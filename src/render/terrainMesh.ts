@@ -193,10 +193,10 @@ export class TerrainMesh {
    * top-down debug view so it can show the road's true world-space
    * curvature without disturbing the main render.
    */
-  pushUnskewedView(playerRow: number): void {
+  pushUnskewedView(playerRow: number, lateralX = 0): void {
     this.savedMatrix.copy(this.mesh.matrix);
     this.worldFrame.setUnskewed(true);
-    this.worldFrame.refreshMatrix(playerRow);
+    this.worldFrame.refreshMatrix(playerRow, lateralX);
   }
 
   popUnskewedView(): void {
@@ -211,8 +211,8 @@ export class TerrainMesh {
    * window is independent of the chunk geometry and is much cheaper to
    * rebuild than the legacy per-vertex pass.
    */
-  update(playerRow: number): void {
-    this.worldFrame.update(playerRow);
+  update(playerRow: number, lateralX = 0): void {
+    this.worldFrame.update(playerRow, lateralX);
     this.windowRowStart = Math.floor(playerRow) - this.params.rowsBehind;
     for (let i = 0; i < this.rowCount; i++) {
       this.bends[i] = this.world.bend.sample(this.windowRowStart + i);

@@ -12,11 +12,21 @@ export interface TerrainMeshSpacingParams {
   landscapeColSpacing: number;
 }
 
+/** Player movement knobs exposed in the debug UI. */
+export interface PlayerParams {
+  /**
+   * Strafe speed as a fraction of forward world speed (|speed| × rowSpacing).
+   * No strafe when |speed| is zero.
+   */
+  strafeSpeedFactor: number;
+}
+
 // Paste over MODE7_DEFAULTS and DEFAULT_WORLD_PARAMS in src/mode7Defaults.ts
 
 /**
- * Single source of truth for tunable procedural + chase-camera defaults exposed
- * in the debug UI. Promote live values via `formatMode7DefaultsModuleSnippet`.
+ * Single source of truth for tunable defaults exposed in the debug UI (procedural,
+ * camera, fog, terrain spacing, water, player movement). Promote live values via
+ * `formatMode7DefaultsModuleSnippet`.
  */
 export const MODE7_DEFAULTS: {
   depth: DepthMapParams;
@@ -25,6 +35,7 @@ export const MODE7_DEFAULTS: {
   fog: SceneFogParams;
   terrain: TerrainMeshSpacingParams;
   water: WaterParams;
+  player: PlayerParams;
 } = {
   depth: {
     // Broader, gentler hills: lower frequency stretches features, fewer octaves
@@ -67,6 +78,9 @@ export const MODE7_DEFAULTS: {
   water: {
     y: -147.5,
   },
+  player: {
+    strafeSpeedFactor: 0.09,
+  },
 };
 
 export const DEFAULT_WORLD_PARAMS: WorldParams = {
@@ -82,6 +96,7 @@ export type Mode7DefaultsSnapshot = {
   fog: SceneFogParams;
   terrain: TerrainMeshSpacingParams;
   water: WaterParams;
+  player: PlayerParams;
 };
 
 function numLiteral(n: number): string {
@@ -150,6 +165,10 @@ function formatWaterInner(p: WaterParams): string {
   return [`    y: ${numLiteral(p.y)},`].join('\n');
 }
 
+function formatPlayerInner(p: PlayerParams): string {
+  return [`    strafeSpeedFactor: ${numLiteral(p.strafeSpeedFactor)},`].join('\n');
+}
+
 function formatDefaultsExportsBlock(live: Mode7DefaultsSnapshot): string {
   const body = [
     `  depth: {`,
@@ -170,12 +189,15 @@ function formatDefaultsExportsBlock(live: Mode7DefaultsSnapshot): string {
     `  water: {`,
     formatWaterInner(live.water),
     `  },`,
+    `  player: {`,
+    formatPlayerInner(live.player),
+    `  },`,
   ].join('\n');
 
   return [
     `/**`,
-    ` * Single source of truth for tunable procedural + chase-camera defaults exposed`,
-    ` * in the debug UI. Promote live values via \`formatMode7DefaultsModuleSnippet\`.`,
+    ` * Single source of truth for tunable defaults exposed in the debug UI. Promote`,
+    ` * live values via \`formatMode7DefaultsModuleSnippet\`.`,
     ` */`,
     `export const MODE7_DEFAULTS: {`,
     `  depth: DepthMapParams;`,
@@ -184,6 +206,7 @@ function formatDefaultsExportsBlock(live: Mode7DefaultsSnapshot): string {
     `  fog: SceneFogParams;`,
     `  terrain: TerrainMeshSpacingParams;`,
     `  water: WaterParams;`,
+    `  player: PlayerParams;`,
     `} = {`,
     body,
     `};`,

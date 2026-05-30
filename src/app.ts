@@ -8,6 +8,7 @@ import { TerrainMesh, type TerrainSnapshot } from './render/terrainMesh.ts';
 import { PlayerMesh } from './render/playerMesh.ts';
 import { WaterPlane } from './render/waterPlane.ts';
 import { DebugDraw } from './render/debugDraw.ts';
+import { meshLateralBounds, signedColFromWorldX } from './render/meshLattice.ts';
 import { PlayerController } from './player/controller.ts';
 import { createPlayerState, type PlayerState } from './player/state.ts';
 import { Hud } from './debug/hud.ts';
@@ -126,6 +127,7 @@ export class App {
     this.gui = opts.headless
       ? null
       : buildGui({
+          controller: this.controller,
           world: this.world,
           chaseCamera: this.camera,
           sceneFog: this.sceneFog,
@@ -227,6 +229,14 @@ export class App {
     this.player.speed = speed;
   }
 
+  setLateralX(lateralX: number): void {
+    const tp = this.terrain.getParams();
+    const bounds = meshLateralBounds(tp.cols, tp.roadColSpacing, tp.landscapeColSpacing);
+    this.player.lateralX = Math.min(bounds.maxX, Math.max(bounds.minX, lateralX));
+    this.simulate(0);
+    this.render();
+  }
+
   /** Advance `frames` × `dt` seconds and render once at the end. */
   tick(frames = 1, dt = 1 / 60): void {
     for (let i = 0; i < frames; i++) this.simulate(dt);
@@ -239,6 +249,7 @@ export class App {
       seed: this.world.getSeed(),
       distance: this.player.distance,
       speed: this.player.speed,
+      lateralX: this.player.lateralX,
       playerY: this.player.y,
       fps: this.fps,
       paused: this.paused,
@@ -261,10 +272,11 @@ export class App {
         landscapeColSpacing: terrain.landscapeColSpacing,
       },
       water: { y: this.water.getParams().y },
+      player: { strafeSpeedFactor: this.controller.getParams().strafeSpeedFactor },
     };
   }
 
-  /** Pasteable block for `src/mode7Defaults.ts` (depth, bend, chase camera, fog, terrain, water). */
+  /** Pasteable block for `src/mode7Defaults.ts` (procedural, camera, fog, terrain, water, player). */
   mode7DefaultsSnippet(): string {
     return formatMode7DefaultsModuleSnippet(this.getMode7DefaultsSnapshot());
   }
@@ -415,10 +427,23 @@ export class App {
   }
 
   private simulate(dt: number): void {
-    if (dt > 0) this.controller.update(this.player, dt);
-    this.player.y = this.world.depth.sampleBilinear(this.player.distance, 0);
-    this.terrain.update(this.player.distance);
-    this.playerMesh.update(this.player.distance, this.world);
+    const tp = this.terrain.getParams();
+    const bounds = meshLateralBounds(tp.cols, tp.roadColSpacing, tp.landscapeColSpacing);
+    if (dt > 0) this.controller.update(this.player, dt, bounds, tp.rowSpacing);
+    const depthCol = signedColFromWorldX(
+      this.player.lateralX,
+      tp.roadColSpacing,
+      tp.landscapeColSpacing,
+    );
+    this.player.y = this.world.depth.sampleBilinear(this.player.distance, depthCol);
+    this.terrain.update(this.player.distance, this.player.lateralX);
+    this.playerMesh.update(
+      this.player.distance,
+      this.world,
+      this.player.lateralX,
+      tp.roadColSpacing,
+      tp.landscapeColSpacing,
+    );
     this.debugDraw.updateCentreLine(
       this.terrain.snapshot().offsets,
       this.terrain.getParams().rowSpacing,
@@ -441,6 +466,7 @@ export class App {
         seed: this.world.getSeed(),
         distance: this.player.distance,
         speed: this.player.speed,
+        lateralX: this.player.lateralX,
         playerY: this.player.y,
         rowFloor: lo,
         rowFrac: this.player.distance - lo,
@@ -467,7 +493,8 @@ export class App {
 
     if (!this.skipTopdown) {
       this.topdown.render(this.renderer, this.scene, {
-        beforeUnskewed: () => this.terrain.pushUnskewedView(this.player.distance),
+        beforeUnskewed: () =>
+          this.terrain.pushUnskewedView(this.player.distance, this.player.lateralX),
         afterUnskewed: () => this.terrain.popUnskewedView(),
       });
     }

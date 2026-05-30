@@ -7,6 +7,7 @@ export interface HudModel {
   seed: string;
   distance: number;
   speed: number;
+  lateralX: number;
   playerY: number;
   rowFloor: number;
   rowFrac: number;
@@ -44,11 +45,12 @@ export class Hud {
       `seed       ${m.seed}`,
       `distance   ${m.distance.toFixed(2)}`,
       `speed      ${m.speed.toFixed(2)}`,
+      `lateral X  ${m.lateralX.toFixed(2)}`,
       `player Y   ${m.playerY.toFixed(3)}`,
       `row        ${m.rowFloor} + ${m.rowFrac.toFixed(3)}`,
       `bend@row   ${m.bendAtPlayer.toFixed(3)}`,
       ``,
-      `[W/↑] forward  [S/↓] reverse  [Shift] boost`,
+      `[W/↑] forward  [S/↓] reverse  [A/←][D/→] strafe  [Shift] boost`,
       `[Space] pause  [R] reseed  [G] wireframe  [V] top-down`,
     ].join('\n');
   }

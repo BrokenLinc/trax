@@ -1,0 +1,36 @@
+---
+description: Tunable defaults live in MODE7_DEFAULTS; lil-gui knobs must not drift from it
+globs: src/mode7Defaults.ts,src/debug/gui.ts,src/app.ts,src/player/**,src/render/**,src/world/**
+alwaysApply: false
+---
+
+# MODE7_DEFAULTS — single source of tunable defaults
+
+All **numeric and color defaults** that appear as lil-gui sliders or color pickers in
+[`src/debug/gui.ts`](mdc:src/debug/gui.ts) must be defined in
+[`src/mode7Defaults.ts`](mdc:src/mode7Defaults.ts) under `MODE7_DEFAULTS` (with a
+typed section and `*Params` interface).
+
+Subsystem code reads them at init, for example:
+
+```ts
+export const DEFAULT_CAMERA: ChaseCameraParams = MODE7_DEFAULTS.camera;
+```
+
+**Not** in `MODE7_DEFAULTS`: session UI toggles (wireframe, debug overlay, top-down
+visibility) — those are runtime view state, not shipped defaults.
+
+## Adding or changing a GUI knob
+
+1. Add the field to the right `*Params` interface and `MODE7_DEFAULTS.<section>` in
+   `mode7Defaults.ts`.
+2. Point the subsystem’s `DEFAULT_*` (or constructor default) at `MODE7_DEFAULTS`.
+3. Bind the GUI to the **live** params object (`getParams()`), not a shadow copy.
+4. Extend `Mode7DefaultsSnapshot` and `formatMode7DefaultsModuleSnippet` so
+   “copy mode7Defaults snippet” stays complete.
+
+## Do not
+
+- Hard-code a default in `gui.ts`, `controller.ts`, or elsewhere if that value is
+  already (or should be) user-tunable in the panel.
+- Add a GUI control without a matching `MODE7_DEFAULTS` entry.

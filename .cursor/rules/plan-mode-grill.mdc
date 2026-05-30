@@ -1,0 +1,17 @@
+---
+description: Plan mode — when planning or scoping work before implementation, grill the user with clarifying questions first
+alwaysApply: false
+---
+
+# Plan mode — question first
+
+When you are in **Plan mode**, or the user is clearly scoping or designing work
+before implementation:
+
+1. **Grill the user with questions** before researching the codebase or writing
+   a plan.
+2. Probe ambiguous requirements, unstated constraints, preferred trade-offs,
+   edge cases, success criteria, and out-of-scope items.
+3. Ask multiple rounds of questions if the first answers still leave gaps.
+4. Do **not** produce an implementation plan until ambiguity is materially
+   reduced.
