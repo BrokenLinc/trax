@@ -37,6 +37,14 @@ export function buildGui(opts: {
     .add(playerParams, 'strafeSpeedFactor', 0.05, 1.5, 0.01)
     .name('strafe speed factor')
     .onChange(() => opts.controller.setParams(playerParams));
+  player
+    .add(playerParams, 'strafeAccel', 5, 120, 1)
+    .name('strafe accel')
+    .onChange(() => opts.controller.setParams(playerParams));
+  player
+    .add(playerParams, 'driftFactor', 0, 25, 0.05)
+    .name('drift factor')
+    .onChange(() => opts.controller.setParams(playerParams));
 
   const visuals = gui.addFolder('visuals');
   const visState = {
@@ -143,7 +151,11 @@ export function buildGui(opts: {
           landscapeColSpacing: terrainParams.landscapeColSpacing,
         },
         water: { y: opts.water.getParams().y },
-        player: { strafeSpeedFactor: opts.controller.getParams().strafeSpeedFactor },
+        player: {
+          strafeSpeedFactor: opts.controller.getParams().strafeSpeedFactor,
+          strafeAccel: opts.controller.getParams().strafeAccel,
+          driftFactor: opts.controller.getParams().driftFactor,
+        },
       });
       const copy = async (): Promise<void> => {
         try {

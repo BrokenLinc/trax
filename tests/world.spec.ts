@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { tangentSlopeAtRow, tangentSlopeChangeAtRow } from '../src/world/bendField.ts';
 import { World } from '../src/world/world.ts';
 
 describe('World', () => {
@@ -41,5 +42,29 @@ describe('World', () => {
       if (w.bend.sample(r) === w.depth.sample(r, 0)) collisions++;
     }
     expect(collisions).toBeLessThan(2);
+  });
+});
+
+describe('tangentSlopeAtRow', () => {
+  it('lerps bend samples across the player interval', () => {
+    const w = new World('mode7');
+    const row = 120.25;
+    const lo = Math.floor(row);
+    const frac = row - lo;
+    const expected = (1 - frac) * w.bend.sample(lo + 1) + frac * w.bend.sample(lo + 2);
+    expect(tangentSlopeAtRow(row, w.bend)).toBe(expected);
+  });
+});
+
+describe('tangentSlopeChangeAtRow', () => {
+  it('lerps adjacent bend first differences across the player interval', () => {
+    const w = new World('mode7');
+    const row = 120.25;
+    const lo = Math.floor(row);
+    const frac = row - lo;
+    const d1 = w.bend.sample(lo + 2) - w.bend.sample(lo + 1);
+    const d2 = w.bend.sample(lo + 3) - w.bend.sample(lo + 2);
+    const expected = (1 - frac) * d1 + frac * d2;
+    expect(tangentSlopeChangeAtRow(row, w.bend)).toBe(expected);
   });
 });

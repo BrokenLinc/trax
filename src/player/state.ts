@@ -12,6 +12,8 @@ export interface PlayerState {
   speed: number;
   /** Metres right of the road centreline (world X); clamped to mesh bounds. */
   lateralX: number;
+  /** Metres/sec right of centreline; integrated into lateralX each frame. */
+  lateralSpeed: number;
   /** Derived each frame; cached for HUD/inspector consumers. */
   y: number;
 }
@@ -21,6 +23,7 @@ export function createPlayerState(initial: Partial<PlayerState> = {}): PlayerSta
     distance: initial.distance ?? 0,
     speed: initial.speed ?? 0,
     lateralX: initial.lateralX ?? 0,
+    lateralSpeed: initial.lateralSpeed ?? 0,
     y: initial.y ?? 0,
   };
 }

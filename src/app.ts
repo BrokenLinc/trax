@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type GUI from 'lil-gui';
 
+import { tangentSlopeChangeAtRow } from './world/bendField.ts';
 import { World } from './world/world.ts';
 import { ChaseCamera, diagnosticChaseVersusThreeLookAtDeg } from './render/camera.ts';
 import { createScene, SceneFog } from './render/scene.ts';
@@ -272,7 +273,11 @@ export class App {
         landscapeColSpacing: terrain.landscapeColSpacing,
       },
       water: { y: this.water.getParams().y },
-      player: { strafeSpeedFactor: this.controller.getParams().strafeSpeedFactor },
+      player: {
+        strafeSpeedFactor: this.controller.getParams().strafeSpeedFactor,
+        strafeAccel: this.controller.getParams().strafeAccel,
+        driftFactor: this.controller.getParams().driftFactor,
+      },
     };
   }
 
@@ -429,7 +434,10 @@ export class App {
   private simulate(dt: number): void {
     const tp = this.terrain.getParams();
     const bounds = meshLateralBounds(tp.cols, tp.roadColSpacing, tp.landscapeColSpacing);
-    if (dt > 0) this.controller.update(this.player, dt, bounds, tp.rowSpacing);
+    if (dt > 0) {
+      const bendSlopeChange = tangentSlopeChangeAtRow(this.player.distance, this.world.bend);
+      this.controller.update(this.player, dt, bounds, tp.rowSpacing, bendSlopeChange);
+    }
     const depthCol = signedColFromWorldX(
       this.player.lateralX,
       tp.roadColSpacing,

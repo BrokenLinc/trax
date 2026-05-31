@@ -15,10 +15,17 @@ export interface TerrainMeshSpacingParams {
 /** Player movement knobs exposed in the debug UI. */
 export interface PlayerParams {
   /**
-   * Strafe speed as a fraction of forward world speed (|speed| × rowSpacing).
+   * Max strafe speed as a fraction of forward world speed (|speed| × rowSpacing).
    * No strafe when |speed| is zero.
    */
   strafeSpeedFactor: number;
+  /** Symmetric lateral acceleration toward target or zero (m/s²). */
+  strafeAccel: number;
+  /**
+   * Bend drift strength: lateral metres per (row travelled × bend slope change).
+   * Positive slope change (tightening right) pushes the player left.
+   */
+  driftFactor: number;
 }
 
 // Paste over MODE7_DEFAULTS and DEFAULT_WORLD_PARAMS in src/mode7Defaults.ts
@@ -79,7 +86,9 @@ export const MODE7_DEFAULTS: {
     y: -147.5,
   },
   player: {
-    strafeSpeedFactor: 0.09,
+    strafeSpeedFactor: 0.13,
+    strafeAccel: 120,
+    driftFactor: 6,
   },
 };
 
@@ -166,7 +175,11 @@ function formatWaterInner(p: WaterParams): string {
 }
 
 function formatPlayerInner(p: PlayerParams): string {
-  return [`    strafeSpeedFactor: ${numLiteral(p.strafeSpeedFactor)},`].join('\n');
+  return [
+    `    strafeSpeedFactor: ${numLiteral(p.strafeSpeedFactor)},`,
+    `    strafeAccel: ${numLiteral(p.strafeAccel)},`,
+    `    driftFactor: ${numLiteral(p.driftFactor)},`,
+  ].join('\n');
 }
 
 function formatDefaultsExportsBlock(live: Mode7DefaultsSnapshot): string {

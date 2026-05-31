@@ -8,6 +8,7 @@ import {
   rowOffsetReference,
   rowOffsetTangentAligned,
   tangentSlopeAt,
+  tangentSlopeChangeAt,
 } from '../src/render/bendMath.ts';
 
 const close = (a: number, b: number, eps = 1e-5) => Math.abs(a - b) < eps;
@@ -189,6 +190,27 @@ describe('tangentSlopeAt — per-frame skew slope', () => {
       const local = k - windowRowStart;
       const expected = bends[local + 1] ?? 0;
       expect(tangentSlopeAt(k, windowRowStart, bends)).toBeCloseTo(expected, 6);
+    }
+  });
+});
+
+describe('tangentSlopeChangeAt — slope first difference', () => {
+  const windowRowStart = -5;
+  const bends = new Float32Array([2, -1, 3, 0, 1, 2, -2, 1, 0, 1, -1]);
+
+  it('returns zero on a constant bend ramp', () => {
+    const windowRowStart = 0;
+    const constant = new Float32Array(20).fill(3);
+    for (let k = 1; k <= 16; k++) {
+      expect(tangentSlopeChangeAt(k, windowRowStart, constant)).toBe(0);
+    }
+  });
+
+  it('equals the adjacent bend difference at integer player rows', () => {
+    for (let k = -4; k <= 4; k++) {
+      const local = k - windowRowStart;
+      const expected = (bends[local + 2] ?? 0) - (bends[local + 1] ?? 0);
+      expect(tangentSlopeChangeAt(k, windowRowStart, bends)).toBeCloseTo(expected, 6);
     }
   });
 });

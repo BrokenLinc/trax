@@ -66,3 +66,28 @@ export class BendField {
     return buf;
   }
 }
+
+/**
+ * Lerp-smoothed local tangent slope at a fractional row. Matches the shear
+ * factor used by `WorldFrame` / `ChunkStreamer.getPlayerTangentSlope`.
+ */
+export function tangentSlopeAtRow(row: number, bend: BendField): number {
+  const lo = Math.floor(row);
+  const frac = row - lo;
+  const s1 = bend.sample(lo + 1);
+  const s2 = bend.sample(lo + 2);
+  return (1 - frac) * s1 + frac * s2;
+}
+
+/**
+ * Lerp-smoothed local first difference of tangent slope at a fractional row.
+ * Zero on a constant-slope ramp; non-zero when bend tightens or eases.
+ * Matches `tangentSlopeChangeAt` in `src/render/bendMath.ts`.
+ */
+export function tangentSlopeChangeAtRow(row: number, bend: BendField): number {
+  const lo = Math.floor(row);
+  const frac = row - lo;
+  const d1 = bend.sample(lo + 2) - bend.sample(lo + 1);
+  const d2 = bend.sample(lo + 3) - bend.sample(lo + 2);
+  return (1 - frac) * d1 + frac * d2;
+}

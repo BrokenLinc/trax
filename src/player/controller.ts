@@ -12,10 +12,17 @@ export interface ControllerParams {
   /** Speed cap in either direction (rows/sec). */
   maxSpeed: number;
   /**
-   * Strafe speed as a fraction of forward world speed (|speed| × rowSpacing).
+   * Max strafe speed as a fraction of forward world speed (|speed| × rowSpacing).
    * No strafe when |speed| is zero.
    */
   strafeSpeedFactor: number;
+  /** Symmetric lateral acceleration toward target or zero (m/s²). */
+  strafeAccel: number;
+  /**
+   * Bend drift strength: lateral metres per (row travelled × bend slope change).
+   * Positive slope change (tightening right) pushes the player left.
+   */
+  driftFactor: number;
 }
 
 export const DEFAULT_CONTROLLER: ControllerParams = {
@@ -24,6 +31,8 @@ export const DEFAULT_CONTROLLER: ControllerParams = {
   friction: 6,
   maxSpeed: 30,
   strafeSpeedFactor: MODE7_DEFAULTS.player.strafeSpeedFactor,
+  strafeAccel: MODE7_DEFAULTS.player.strafeAccel,
+  driftFactor: MODE7_DEFAULTS.player.driftFactor,
 };
 
 /**
@@ -75,6 +84,7 @@ export class PlayerController {
     dt: number,
     lateralBounds: MeshLateralBounds,
     rowSpacing: number,
+    bendSlopeChange: number,
   ): void {
     const p = this.params;
     let accel = 0;
@@ -88,17 +98,29 @@ export class PlayerController {
     }
     if (player.speed > p.maxSpeed) player.speed = p.maxSpeed;
     if (player.speed < -p.maxSpeed) player.speed = -p.maxSpeed;
-    player.distance += player.speed * dt;
+    const dRows = player.speed * dt;
+    player.distance += dRows;
+
+    if (p.driftFactor !== 0 && dRows !== 0) {
+      player.lateralX += -dRows * bendSlopeChange * p.driftFactor;
+    }
 
     const strafeDir = (this.strafeRight ? 1 : 0) + (this.strafeLeft ? -1 : 0);
-    if (strafeDir !== 0 && player.speed !== 0) {
-      const strafeSpeed = p.strafeSpeedFactor * Math.abs(player.speed) * rowSpacing;
-      player.lateralX = clamp(
-        player.lateralX + strafeDir * strafeSpeed * dt,
-        lateralBounds.minX,
-        lateralBounds.maxX,
-      );
+    const maxStrafe =
+      player.speed !== 0 ? p.strafeSpeedFactor * Math.abs(player.speed) * rowSpacing : 0;
+    const targetLateralSpeed = strafeDir !== 0 && maxStrafe > 0 ? strafeDir * maxStrafe : 0;
+    player.lateralSpeed = moveToward(player.lateralSpeed, targetLateralSpeed, p.strafeAccel * dt);
+    if (maxStrafe > 0) {
+      player.lateralSpeed = clamp(player.lateralSpeed, -maxStrafe, maxStrafe);
+    } else {
+      player.lateralSpeed = 0;
     }
+    const nextLateralX = player.lateralX + player.lateralSpeed * dt;
+    const clampedLateralX = clamp(nextLateralX, lateralBounds.minX, lateralBounds.maxX);
+    if (clampedLateralX !== nextLateralX) {
+      player.lateralSpeed = 0;
+    }
+    player.lateralX = clampedLateralX;
   }
 
   private applyKey(code: string, down: boolean): void {
@@ -129,4 +151,10 @@ export class PlayerController {
 
 function clamp(v: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, v));
+}
+
+function moveToward(current: number, target: number, maxDelta: number): number {
+  if (current < target) return Math.min(target, current + maxDelta);
+  if (current > target) return Math.max(target, current - maxDelta);
+  return current;
 }

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { tangentSlopeAtRow } from '../world/bendField.ts';
 import type { World } from '../world/world.ts';
 import { cumulativeOffsetAt } from './bendMath.ts';
 import { bakeChunk, type BakedChunk } from './chunkBaker.ts';
@@ -187,11 +188,7 @@ export class ChunkStreamer {
    * samples may live in the neighbouring chunk's bend window).
    */
   getPlayerTangentSlope(playerRow: number): number {
-    const lo = Math.floor(playerRow);
-    const frac = playerRow - lo;
-    const s1 = this.world.bend.sample(lo + 1);
-    const s2 = this.world.bend.sample(lo + 2);
-    return (1 - frac) * s1 + frac * s2;
+    return tangentSlopeAtRow(playerRow, this.world.bend);
   }
 
   /** The chunk that contains `playerRow`, or `undefined` if none. */

@@ -139,6 +139,25 @@ export function tangentSlopeAt(
 }
 
 /**
+ * Lerp-smoothed local first difference of tangent slope at the player's
+ * fractional row. Zero when bends are constant; used for player drift.
+ *
+ *   Δs = (1 − frac) · (bends[lo + 2] − bends[lo + 1]) + frac · (bends[lo + 3] − bends[lo + 2])
+ */
+export function tangentSlopeChangeAt(
+  playerRow: number,
+  windowRowStart: number,
+  bends: ArrayLike<number>,
+): number {
+  const lo = Math.floor(playerRow);
+  const frac = playerRow - lo;
+  const local = lo - windowRowStart;
+  const d1 = bendAt(bends, local + 2) - bendAt(bends, local + 1);
+  const d2 = bendAt(bends, local + 3) - bendAt(bends, local + 2);
+  return (1 - frac) * d1 + frac * d2;
+}
+
+/**
  * "Tangent-aligned" presentation of the cumulative offsets. Subtracts a
  * tangent line at the player's position so the rendered road has BOTH zero
  * offset AND zero local slope at the player — the player never appears to
