@@ -120,6 +120,25 @@ export function buildGui(opts: {
     .name('landscape col spacing')
     .onChange(syncMesh);
 
+  const surfaceVar = gui.addFolder('surface variation');
+  const svp = tp.surfaceVariation;
+  const syncSurfaceVariation = (): void => {
+    opts.terrain.setParams({ surfaceVariation: svp });
+  };
+  surfaceVar.add(svp, 'rowCellSize', 1, 16, 1).onChange(syncSurfaceVariation);
+  surfaceVar.add(svp, 'colCellSize', 1, 16, 1).onChange(syncSurfaceVariation);
+  surfaceVar.add(svp, 'sampleScale', 0.01, 1, 0.01).onChange(syncSurfaceVariation);
+  surfaceVar
+    .add(svp, 'shoulderStrength', 0, 5, 0.01)
+    .name('shoulder strength')
+    .onChange(syncSurfaceVariation);
+  surfaceVar
+    .add(svp, 'roadStrength', 0, 5, 0.005)
+    .name('road strength')
+    .onChange(syncSurfaceVariation);
+  surfaceVar.add(svp, 'minFactor', 0, 10, 0.01).onChange(syncSurfaceVariation);
+  surfaceVar.add(svp, 'maxFactor', 0, 10, 0.01).onChange(syncSurfaceVariation);
+
   const bend = gui.addFolder('bend field');
   const bp = opts.world.bend.getParams();
   bend.add(bp, 'frequency', 0.001, 0.1, 0.001).onChange(() => opts.world.bend.setParams(bp));
@@ -150,6 +169,7 @@ export function buildGui(opts: {
           roadColSpacing: terrainParams.roadColSpacing,
           landscapeColSpacing: terrainParams.landscapeColSpacing,
         },
+        surfaceVariation: terrainParams.surfaceVariation,
         water: { y: opts.water.getParams().y },
         player: {
           strafeSpeedFactor: opts.controller.getParams().strafeSpeedFactor,

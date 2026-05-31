@@ -4,6 +4,10 @@ import type { World } from '../world/world.ts';
 import { prefixSum, rebuildOffsetsTangentAligned } from './bendMath.ts';
 import { ChunkStreamer } from './chunkStreamer.ts';
 import { createTerrainSurfaceTexture } from './terrainSurface.ts';
+import {
+  sanitiseSurfaceVariationParams,
+  type TerrainSurfaceVariationParams,
+} from './terrainSurfaceVariation.ts';
 import { WorldFrame } from './worldFrame.ts';
 
 export interface TerrainParams {
@@ -29,6 +33,8 @@ export interface TerrainParams {
    * chunk bake. Larger → fewer chunks, bigger one-time bakes on crossings.
    */
   rowsPerChunk: number;
+  /** Pixelated vertex-color variation on the baked terrain mesh. */
+  surfaceVariation: TerrainSurfaceVariationParams;
 }
 
 /** Row count ahead of the player that covers `MODE7_DEFAULTS.camera.far` metres. */
@@ -42,6 +48,7 @@ export const DEFAULT_TERRAIN: TerrainParams = {
   cols: 64,
   ...MODE7_DEFAULTS.terrain,
   rowsPerChunk: 64,
+  surfaceVariation: MODE7_DEFAULTS.surfaceVariation,
 };
 
 export interface TerrainSnapshot {
@@ -90,9 +97,11 @@ export class TerrainMesh {
     this.rowCount = this.params.rowsAhead + this.params.rowsBehind + 1;
 
     this.surfaceTexture = createTerrainSurfaceTexture();
+    this.surfaceTexture.anisotropy = 1;
     this.material = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       map: this.surfaceTexture,
+      vertexColors: true,
       roughness: 0.85,
       metalness: 0.05,
       flatShading: true,
@@ -113,6 +122,7 @@ export class TerrainMesh {
         rowSpacing: this.params.rowSpacing,
         roadColSpacing: this.params.roadColSpacing,
         landscapeColSpacing: this.params.landscapeColSpacing,
+        surfaceVariation: this.params.surfaceVariation,
         rowsAhead: this.params.rowsAhead,
         rowsBehind: this.params.rowsBehind,
       },
@@ -153,6 +163,7 @@ export class TerrainMesh {
       rowSpacing: this.params.rowSpacing,
       roadColSpacing: this.params.roadColSpacing,
       landscapeColSpacing: this.params.landscapeColSpacing,
+      surfaceVariation: this.params.surfaceVariation,
       rowsAhead: this.params.rowsAhead,
       rowsBehind: this.params.rowsBehind,
     });
@@ -253,5 +264,10 @@ export class TerrainMesh {
 function sanitiseParams(p: TerrainParams): TerrainParams {
   const cols = p.cols % 2 === 0 ? p.cols + 1 : p.cols;
   const rowsPerChunk = Math.max(1, Math.floor(p.rowsPerChunk));
-  return { ...p, cols, rowsPerChunk };
+  return {
+    ...p,
+    cols,
+    rowsPerChunk,
+    surfaceVariation: sanitiseSurfaceVariationParams(p.surfaceVariation),
+  };
 }

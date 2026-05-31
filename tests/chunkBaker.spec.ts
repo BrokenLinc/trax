@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MODE7_DEFAULTS } from '../src/mode7Defaults.ts';
 import { cumulativeOffsetAt } from '../src/render/bendMath.ts';
 import { bakeChunk, type ChunkParams } from '../src/render/chunkBaker.ts';
 import { worldXForSignedCol } from '../src/render/meshLattice.ts';
@@ -11,6 +12,7 @@ const PARAMS: ChunkParams = {
   rowSpacing: 1.0,
   roadColSpacing: 0.6,
   landscapeColSpacing: 0.6,
+  surfaceVariation: MODE7_DEFAULTS.surfaceVariation,
 };
 
 function positions(geometry: ReturnType<typeof bakeChunk>['geometry']): Float32Array {
@@ -19,6 +21,18 @@ function positions(geometry: ReturnType<typeof bakeChunk>['geometry']): Float32A
 
 function uvs(geometry: ReturnType<typeof bakeChunk>['geometry']): Float32Array {
   return geometry.getAttribute('uv').array as Float32Array;
+}
+
+function colors(geometry: ReturnType<typeof bakeChunk>['geometry']): Float32Array {
+  return geometry.getAttribute('color').array as Float32Array;
+}
+
+function colorAt(
+  geometry: ReturnType<typeof bakeChunk>['geometry'],
+  idx: number,
+): [number, number, number] {
+  const arr = colors(geometry);
+  return [arr[idx * 3] ?? 0, arr[idx * 3 + 1] ?? 0, arr[idx * 3 + 2] ?? 0];
 }
 
 function uvAt(geometry: ReturnType<typeof bakeChunk>['geometry'], idx: number): [number, number] {
@@ -65,8 +79,32 @@ function logicalCorner(
   return [x, y, z];
 }
 
-function vertsPerRow(cols: number): number {
-  return cols + 3;
+/** Final mesh uses four independent corners per quad (no shared variation verts). */
+function vertsPerChunk(rowsPerChunk: number, cols: number): number {
+  const oddCols = cols % 2 === 0 ? cols + 1 : cols;
+  return 4 * rowsPerChunk * (oddCols - 1);
+}
+
+/** Corner vertex indices for quad `(quadRow, quadCol)` in row-major order. */
+function quadCornerIndices(
+  geometry: ReturnType<typeof bakeChunk>['geometry'],
+  quadRow: number,
+  quadCol: number,
+  cols: number,
+): number[] {
+  const oddCols = cols % 2 === 0 ? cols + 1 : cols;
+  const base = (quadRow * (oddCols - 1) + quadCol) * 6;
+  const index = geometry.getIndex()?.array ?? [];
+  return [
+    ...new Set([
+      index[base] ?? 0,
+      index[base + 1] ?? 0,
+      index[base + 2] ?? 0,
+      index[base + 3] ?? 0,
+      index[base + 4] ?? 0,
+      index[base + 5] ?? 0,
+    ]),
+  ];
 }
 
 describe('bakeChunk — geometry parity', () => {
@@ -201,18 +239,77 @@ describe('bakeChunk — guard rails', () => {
     const chunk = bakeChunk(world, 0, { ...PARAMS, cols: 4 });
     const cols = 5;
     const arr = positions(chunk.geometry);
-    expect(arr.length).toBe(vertsPerRow(cols) * (PARAMS.rowsPerChunk + 1) * 3);
+    expect(arr.length).toBe(vertsPerChunk(PARAMS.rowsPerChunk, cols) * 3);
   });
 });
 
 describe('bakeChunk — per-quad surface UVs', () => {
-  it('exposes a uv attribute with one entry per vertex', () => {
+  it('exposes uv and color attributes with one entry per vertex', () => {
     const world = new World('uvSpec');
     const chunk = bakeChunk(world, 0, PARAMS);
-    const cols = PARAMS.cols;
-    const vertCount = vertsPerRow(cols) * (PARAMS.rowsPerChunk + 1);
+    const vertCount = vertsPerChunk(PARAMS.rowsPerChunk, PARAMS.cols);
     expect(uvs(chunk.geometry).length).toBe(vertCount * 2);
-    expect(chunk.geometry.getAttribute('color')).toBeUndefined();
+    expect(colors(chunk.geometry).length).toBe(vertCount * 3);
+  });
+
+  it('assigns a uniform color across each quad (no corner interpolation)', () => {
+    const world = new World('quadFlatColor');
+    const chunk = bakeChunk(world, 0, { ...PARAMS, cols: 7 });
+    const index = chunk.geometry.getIndex();
+    expect(index).not.toBeNull();
+    const arr = index?.array ?? [];
+    const tri = [arr[0] ?? 0, arr[1] ?? 0, arr[2] ?? 0];
+    const colArr = colors(chunk.geometry);
+    const triColors = tri.map((idx) => [
+      colArr[idx * 3] ?? 0,
+      colArr[idx * 3 + 1] ?? 0,
+      colArr[idx * 3 + 2] ?? 0,
+    ]);
+    for (const [r, g, b] of triColors) {
+      expect(r).toBeCloseTo(triColors[0]?.[0] ?? 0, 6);
+      expect(g).toBeCloseTo(triColors[0]?.[1] ?? 0, 6);
+      expect(b).toBeCloseTo(triColors[0]?.[2] ?? 0, 6);
+    }
+  });
+
+  it('uses neutral asphalt colors when roadStrength is zero', () => {
+    const world = new World('colorFlatRoad');
+    const params: ChunkParams = {
+      ...PARAMS,
+      cols: 32,
+      surfaceVariation: { ...MODE7_DEFAULTS.surfaceVariation, roadStrength: 0 },
+    };
+    const chunk = bakeChunk(world, 0, params);
+    const centre = Math.floor(32 / 2);
+    const roadQuadCol = centre - 1;
+    const verts = quadCornerIndices(chunk.geometry, 0, roadQuadCol, 32);
+    expect(verts.length).toBe(4);
+    for (const idx of verts) {
+      const [r, g, b] = colorAt(chunk.geometry, idx);
+      expect(r).toBeCloseTo(1, 5);
+      expect(g).toBeCloseTo(1, 5);
+      expect(b).toBeCloseTo(1, 5);
+    }
+  });
+
+  it('assigns uniform shoulder color on a shoulder quad', () => {
+    const world = new World('colorShoulderCell');
+    const params: ChunkParams = {
+      ...PARAMS,
+      cols: 32,
+      surfaceVariation: {
+        ...MODE7_DEFAULTS.surfaceVariation,
+        rowCellSize: 64,
+        colCellSize: 8,
+        shoulderStrength: 0.3,
+      },
+    };
+    const chunk = bakeChunk(world, 0, params);
+    const verts = quadCornerIndices(chunk.geometry, 0, 0, 32);
+    expect(verts.length).toBe(4);
+    const multipliers = verts.map((idx) => colorAt(chunk.geometry, idx)[0]);
+    expect(new Set(multipliers).size).toBe(1);
+    expect(multipliers[0]).not.toBeCloseTo(1, 3);
   });
 
   it.each([

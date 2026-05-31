@@ -50,6 +50,7 @@ export function createTerrainSurfaceTexture(): THREE.DataTexture {
     ...pixel(SHOULDER_RGB),
   ]);
   const tex = new THREE.DataTexture(data, SURFACE_ATLAS_WIDTH, 1, THREE.RGBAFormat);
+  tex.generateMipmaps = false;
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
   tex.wrapS = THREE.ClampToEdgeWrapping;
