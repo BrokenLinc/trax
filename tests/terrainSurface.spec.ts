@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   asphaltSideForQuad,
+  CHUNK_SURFACE_SIZE,
+  chunkLatticeUv,
   isAsphaltQuad,
-  SURFACE_ATLAS_WIDTH,
-  uvForSurface,
 } from '../src/render/terrainSurface.ts';
 
 describe('terrainSurface', () => {
@@ -21,11 +23,21 @@ describe('terrainSurface', () => {
     expect(asphaltSideForQuad(centre, centre)).toBe('right');
   });
 
-  it('places UVs at texel centres in the 4×1 atlas', () => {
-    const w = SURFACE_ATLAS_WIDTH;
-    expect(uvForSurface('shoulder', 'left')).toEqual([0.5 / w, 0.5]);
-    expect(uvForSurface('asphalt', 'left')).toEqual([1.5 / w, 0.5]);
-    expect(uvForSurface('asphalt', 'right')).toEqual([2.5 / w, 0.5]);
-    expect(uvForSurface('shoulder', 'right')).toEqual([3.5 / w, 0.5]);
+  it('maps quad corners to lattice UVs spanning 0–1 across the chunk', () => {
+    const rowsPerChunk = 8;
+    const cols = 5;
+    expect(chunkLatticeUv(0, 0, 0, 0, rowsPerChunk, cols)).toEqual([0, 0]);
+    expect(chunkLatticeUv(0, 0, 1, 0, rowsPerChunk, cols)).toEqual([0.25, 0]);
+    expect(chunkLatticeUv(0, 0, 0, 1, rowsPerChunk, cols)).toEqual([0, 0.125]);
+    expect(chunkLatticeUv(rowsPerChunk - 1, cols - 2, 1, 1, rowsPerChunk, cols)).toEqual([1, 1]);
+  });
+
+  it('ships a 1024×1024 chunk surface PNG in public/', () => {
+    const path = join(process.cwd(), 'public', 'terrain-chunk-surface.png');
+    const buf = readFileSync(path);
+    expect(buf[0]).toBe(0x89);
+    expect(buf[1]).toBe(0x50);
+    expect(buf.readUInt32BE(16)).toBe(CHUNK_SURFACE_SIZE);
+    expect(buf.readUInt32BE(20)).toBe(CHUNK_SURFACE_SIZE);
   });
 });

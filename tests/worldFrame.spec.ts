@@ -10,7 +10,6 @@ import { bakeChunk, type ChunkParams } from '../src/render/chunkBaker.ts';
 import { worldXForSignedCol } from '../src/render/meshLattice.ts';
 import { ChunkStreamer, type StreamerParams } from '../src/render/chunkStreamer.ts';
 import { WorldFrame } from '../src/render/worldFrame.ts';
-import { MODE7_DEFAULTS } from '../src/mode7Defaults.ts';
 import { World } from '../src/world/world.ts';
 
 const CHUNK_PARAMS: ChunkParams = {
@@ -19,7 +18,6 @@ const CHUNK_PARAMS: ChunkParams = {
   rowSpacing: 1.0,
   roadColSpacing: 0.6,
   landscapeColSpacing: 0.6,
-  surfaceVariation: MODE7_DEFAULTS.surfaceVariation,
 };
 
 function vertexAtLogical(
@@ -137,7 +135,6 @@ const STREAMER_PARAMS: StreamerParams = {
   rowSpacing: CHUNK_PARAMS.rowSpacing,
   roadColSpacing: CHUNK_PARAMS.roadColSpacing,
   landscapeColSpacing: CHUNK_PARAMS.landscapeColSpacing,
-  surfaceVariation: CHUNK_PARAMS.surfaceVariation,
   rowsAhead: 32,
   rowsBehind: 8,
 };

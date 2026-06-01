@@ -272,7 +272,6 @@ export class App {
         roadColSpacing: terrain.roadColSpacing,
         landscapeColSpacing: terrain.landscapeColSpacing,
       },
-      surfaceVariation: { ...terrain.surfaceVariation },
       water: { y: this.water.getParams().y },
       player: {
         strafeSpeedFactor: this.controller.getParams().strafeSpeedFactor,

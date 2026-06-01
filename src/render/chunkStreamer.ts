@@ -3,7 +3,6 @@ import { tangentSlopeAtRow } from '../world/bendField.ts';
 import type { World } from '../world/world.ts';
 import { cumulativeOffsetAt } from './bendMath.ts';
 import { bakeChunk, type BakedChunk } from './chunkBaker.ts';
-import type { TerrainSurfaceVariationParams } from './terrainSurfaceVariation.ts';
 
 export interface StreamerParams {
   rowsPerChunk: number;
@@ -11,7 +10,6 @@ export interface StreamerParams {
   rowSpacing: number;
   roadColSpacing: number;
   landscapeColSpacing: number;
-  surfaceVariation: TerrainSurfaceVariationParams;
   /** How many rows ahead of the player to keep loaded. */
   rowsAhead: number;
   /** How many rows behind the player to keep loaded. */
@@ -232,7 +230,6 @@ export class ChunkStreamer {
       rowSpacing: this.params.rowSpacing,
       roadColSpacing: this.params.roadColSpacing,
       landscapeColSpacing: this.params.landscapeColSpacing,
-      surfaceVariation: this.params.surfaceVariation,
     };
     return (idx) => bakeChunk(this.world, idx, chunkParams);
   }

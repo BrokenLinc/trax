@@ -1,6 +1,5 @@
 import type { ChaseCameraParams } from './render/camera.ts';
 import type { SceneFogParams } from './render/scene.ts';
-import type { TerrainSurfaceVariationParams } from './render/terrainSurfaceVariation.ts';
 import type { WaterParams } from './render/waterPlane.ts';
 import type { BendFieldParams } from './world/bendField.ts';
 import type { DepthMapParams } from './world/depthMap.ts';
@@ -40,7 +39,6 @@ export const MODE7_DEFAULTS: {
   camera: ChaseCameraParams;
   fog: SceneFogParams;
   terrain: TerrainMeshSpacingParams;
-  surfaceVariation: TerrainSurfaceVariationParams;
   water: WaterParams;
   player: PlayerParams;
 } = {
@@ -82,15 +80,6 @@ export const MODE7_DEFAULTS: {
     roadColSpacing: 6,
     landscapeColSpacing: 50,
   },
-  surfaceVariation: {
-    rowCellSize: 5,
-    colCellSize: 1,
-    sampleScale: 1,
-    shoulderStrength: 0.09,
-    roadStrength: 0.04,
-    minFactor: 0,
-    maxFactor: 10,
-  },
   water: {
     y: -147.5,
   },
@@ -113,7 +102,6 @@ export type Mode7DefaultsSnapshot = {
   camera: ChaseCameraParams;
   fog: SceneFogParams;
   terrain: TerrainMeshSpacingParams;
-  surfaceVariation: TerrainSurfaceVariationParams;
   water: WaterParams;
   player: PlayerParams;
 };
@@ -180,18 +168,6 @@ function formatTerrainInner(p: TerrainMeshSpacingParams): string {
   ].join('\n');
 }
 
-function formatSurfaceVariationInner(p: TerrainSurfaceVariationParams): string {
-  return [
-    `    rowCellSize: ${numLiteral(p.rowCellSize)},`,
-    `    colCellSize: ${numLiteral(p.colCellSize)},`,
-    `    sampleScale: ${numLiteral(p.sampleScale)},`,
-    `    shoulderStrength: ${numLiteral(p.shoulderStrength)},`,
-    `    roadStrength: ${numLiteral(p.roadStrength)},`,
-    `    minFactor: ${numLiteral(p.minFactor)},`,
-    `    maxFactor: ${numLiteral(p.maxFactor)},`,
-  ].join('\n');
-}
-
 function formatWaterInner(p: WaterParams): string {
   return [`    y: ${numLiteral(p.y)},`].join('\n');
 }
@@ -221,9 +197,6 @@ function formatDefaultsExportsBlock(live: Mode7DefaultsSnapshot): string {
     `  terrain: {`,
     formatTerrainInner(live.terrain),
     `  },`,
-    `  surfaceVariation: {`,
-    formatSurfaceVariationInner(live.surfaceVariation),
-    `  },`,
     `  water: {`,
     formatWaterInner(live.water),
     `  },`,
@@ -243,7 +216,6 @@ function formatDefaultsExportsBlock(live: Mode7DefaultsSnapshot): string {
     `  camera: ChaseCameraParams;`,
     `  fog: SceneFogParams;`,
     `  terrain: TerrainMeshSpacingParams;`,
-    `  surfaceVariation: TerrainSurfaceVariationParams;`,
     `  water: WaterParams;`,
     `  player: PlayerParams;`,
     `} = {`,

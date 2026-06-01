@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { MODE7_DEFAULTS } from '../src/mode7Defaults.ts';
 import { cumulativeOffsetAt } from '../src/render/bendMath.ts';
 import { bakeChunk, type ChunkParams } from '../src/render/chunkBaker.ts';
 import { worldXForSignedCol } from '../src/render/meshLattice.ts';
-import { asphaltSideForQuad, isAsphaltQuad, uvForSurface } from '../src/render/terrainSurface.ts';
+import { chunkLatticeUv, isAsphaltQuad } from '../src/render/terrainSurface.ts';
 import { World } from '../src/world/world.ts';
 
 const PARAMS: ChunkParams = {
@@ -12,7 +11,6 @@ const PARAMS: ChunkParams = {
   rowSpacing: 1.0,
   roadColSpacing: 0.6,
   landscapeColSpacing: 0.6,
-  surfaceVariation: MODE7_DEFAULTS.surfaceVariation,
 };
 
 function positions(geometry: ReturnType<typeof bakeChunk>['geometry']): Float32Array {
@@ -21,18 +19,6 @@ function positions(geometry: ReturnType<typeof bakeChunk>['geometry']): Float32A
 
 function uvs(geometry: ReturnType<typeof bakeChunk>['geometry']): Float32Array {
   return geometry.getAttribute('uv').array as Float32Array;
-}
-
-function colors(geometry: ReturnType<typeof bakeChunk>['geometry']): Float32Array {
-  return geometry.getAttribute('color').array as Float32Array;
-}
-
-function colorAt(
-  geometry: ReturnType<typeof bakeChunk>['geometry'],
-  idx: number,
-): [number, number, number] {
-  const arr = colors(geometry);
-  return [arr[idx * 3] ?? 0, arr[idx * 3 + 1] ?? 0, arr[idx * 3 + 2] ?? 0];
 }
 
 function uvAt(geometry: ReturnType<typeof bakeChunk>['geometry'], idx: number): [number, number] {
@@ -79,13 +65,13 @@ function logicalCorner(
   return [x, y, z];
 }
 
-/** Final mesh uses four independent corners per quad (no shared variation verts). */
+/** Final mesh uses four independent corners per quad. */
 function vertsPerChunk(rowsPerChunk: number, cols: number): number {
   const oddCols = cols % 2 === 0 ? cols + 1 : cols;
   return 4 * rowsPerChunk * (oddCols - 1);
 }
 
-/** Corner vertex indices for quad `(quadRow, quadCol)` in row-major order. */
+/** Corner vertex indices for quad `(quadRow, quadCol)`. */
 function quadCornerIndices(
   geometry: ReturnType<typeof bakeChunk>['geometry'],
   quadRow: number,
@@ -243,149 +229,59 @@ describe('bakeChunk — guard rails', () => {
   });
 });
 
-describe('bakeChunk — per-quad surface UVs', () => {
-  it('exposes uv and color attributes with one entry per vertex', () => {
+describe('bakeChunk — chunk-fill lattice UVs', () => {
+  it('exposes uv attribute with one entry per vertex and no color attribute', () => {
     const world = new World('uvSpec');
     const chunk = bakeChunk(world, 0, PARAMS);
     const vertCount = vertsPerChunk(PARAMS.rowsPerChunk, PARAMS.cols);
     expect(uvs(chunk.geometry).length).toBe(vertCount * 2);
-    expect(colors(chunk.geometry).length).toBe(vertCount * 3);
+    expect(chunk.geometry.getAttribute('color')).toBeUndefined();
   });
 
-  it('assigns a uniform color across each quad (no corner interpolation)', () => {
-    const world = new World('quadFlatColor');
-    const chunk = bakeChunk(world, 0, { ...PARAMS, cols: 7 });
-    const index = chunk.geometry.getIndex();
-    expect(index).not.toBeNull();
-    const arr = index?.array ?? [];
-    const tri = [arr[0] ?? 0, arr[1] ?? 0, arr[2] ?? 0];
-    const colArr = colors(chunk.geometry);
-    const triColors = tri.map((idx) => [
-      colArr[idx * 3] ?? 0,
-      colArr[idx * 3 + 1] ?? 0,
-      colArr[idx * 3 + 2] ?? 0,
-    ]);
-    for (const [r, g, b] of triColors) {
-      expect(r).toBeCloseTo(triColors[0]?.[0] ?? 0, 6);
-      expect(g).toBeCloseTo(triColors[0]?.[1] ?? 0, 6);
-      expect(b).toBeCloseTo(triColors[0]?.[2] ?? 0, 6);
-    }
-  });
-
-  it('uses neutral asphalt colors when roadStrength is zero', () => {
-    const world = new World('colorFlatRoad');
-    const params: ChunkParams = {
-      ...PARAMS,
-      cols: 32,
-      surfaceVariation: { ...MODE7_DEFAULTS.surfaceVariation, roadStrength: 0 },
-    };
-    const chunk = bakeChunk(world, 0, params);
-    const centre = Math.floor(32 / 2);
-    const roadQuadCol = centre - 1;
-    const verts = quadCornerIndices(chunk.geometry, 0, roadQuadCol, 32);
+  it('spans lattice UVs across each quad', () => {
+    const world = new World('uvSpan');
+    const chunk = bakeChunk(world, 0, PARAMS);
+    const verts = quadCornerIndices(chunk.geometry, 0, 0, PARAMS.cols);
     expect(verts.length).toBe(4);
-    for (const idx of verts) {
-      const [r, g, b] = colorAt(chunk.geometry, idx);
-      expect(r).toBeCloseTo(1, 5);
-      expect(g).toBeCloseTo(1, 5);
-      expect(b).toBeCloseTo(1, 5);
-    }
+    const uValues = verts.map((idx) => uvAt(chunk.geometry, idx)[0]);
+    const vValues = verts.map((idx) => uvAt(chunk.geometry, idx)[1]);
+    expect(Math.min(...uValues)).toBeCloseTo(0, 6);
+    expect(Math.max(...uValues)).toBeCloseTo(0.25, 6);
+    expect(Math.min(...vValues)).toBeCloseTo(0, 6);
+    expect(Math.max(...vValues)).toBeCloseTo(1 / PARAMS.rowsPerChunk, 6);
   });
 
-  it('assigns uniform shoulder color on a shoulder quad', () => {
-    const world = new World('colorShoulderCell');
-    const params: ChunkParams = {
-      ...PARAMS,
-      cols: 32,
-      surfaceVariation: {
-        ...MODE7_DEFAULTS.surfaceVariation,
-        rowCellSize: 64,
-        colCellSize: 8,
-        shoulderStrength: 0.3,
-      },
-    };
-    const chunk = bakeChunk(world, 0, params);
-    const verts = quadCornerIndices(chunk.geometry, 0, 0, 32);
-    expect(verts.length).toBe(4);
-    const multipliers = verts.map((idx) => colorAt(chunk.geometry, idx)[0]);
-    expect(new Set(multipliers).size).toBe(1);
-    expect(multipliers[0]).not.toBeCloseTo(1, 3);
-  });
-
-  it.each([
-    { label: 'west of centre', quadColOffset: -1 },
-    { label: 'east of centre', quadColOffset: 0 },
-  ])('assigns uniform road UVs on the road quad $label', ({ quadColOffset }) => {
+  it('assigns chunkLatticeUv at road quad corners', () => {
     const world = new World('uvSpec');
-    const params = { ...PARAMS, cols: 32 };
+    const params = { ...PARAMS, cols: 33 };
     const chunk = bakeChunk(world, 0, params);
-    const centre = Math.floor(32 / 2);
-    const c = centre + quadColOffset;
-    expect(isAsphaltQuad(c, centre)).toBe(true);
-    const side = asphaltSideForQuad(c, centre);
-    const [uRoad, vRoad] = uvForSurface('asphalt', side);
-    const roadCorners: Array<{ col: number; row: number }> = [
-      { col: c, row: 0 },
-      { col: c, row: 1 },
-      { col: c + 1, row: 0 },
-      { col: c + 1, row: 1 },
-    ];
-    for (const { col, row } of roadCorners) {
-      const [x, y, z] = logicalCorner(world, chunk, params, row, col);
-      const hits = findVertexIndicesAt(chunk.geometry, x, y, z);
-      const roadHits = hits.filter((idx) => {
-        const [uu, vv] = uvAt(chunk.geometry, idx);
-        return Math.abs(uu - uRoad) < 1e-6 && Math.abs(vv - vRoad) < 1e-6;
-      });
-      expect(roadHits.length).toBeGreaterThan(0);
-    }
-  });
-
-  it('assigns uniform shoulder UVs on the shoulder–road boundary quad', () => {
-    const world = new World('uvSpec');
-    const params = { ...PARAMS, cols: 32 };
-    const chunk = bakeChunk(world, 0, params);
-    const cols = 32;
+    const cols = 33;
     const centre = Math.floor(cols / 2);
-    const c = centre - 2;
-    expect(isAsphaltQuad(c, centre)).toBe(false);
-    const [uShoulder] = uvForSurface('shoulder', 'left');
-    const corners: Array<{ col: number; row: number }> = [
-      { col: c, row: 0 },
-      { col: c + 1, row: 0 },
-      { col: c, row: 1 },
-      { col: c + 1, row: 1 },
-    ];
-    for (const { col, row } of corners) {
-      const [x, y, z] = logicalCorner(world, chunk, params, row, col);
-      const hits = findVertexIndicesAt(chunk.geometry, x, y, z);
-      const shoulderHits = hits.filter((idx) => {
-        const [u] = uvAt(chunk.geometry, idx);
-        return Math.abs(u - uShoulder) < 1e-6;
-      });
-      expect(shoulderHits.length).toBeGreaterThan(0);
-    }
+    const c = centre - 1;
+    expect(isAsphaltQuad(c, centre)).toBe(true);
+    const expected = chunkLatticeUv(0, c, 0, 0, params.rowsPerChunk, cols);
+    const [x, y, z] = logicalCorner(world, chunk, params, 0, c);
+    const hits = findVertexIndicesAt(chunk.geometry, x, y, z);
+    const matched = hits.some((idx) => {
+      const [u, v] = uvAt(chunk.geometry, idx);
+      return Math.abs(u - expected[0]) < 1e-6 && Math.abs(v - expected[1]) < 1e-6;
+    });
+    expect(matched).toBe(true);
   });
 
-  it('uses no road UV on a far shoulder quad', () => {
-    const world = new World('uvSpec');
-    const chunk = bakeChunk(world, 0, { ...PARAMS, cols: 32 });
-    const c = 0;
-    const [uRoadL] = uvForSurface('asphalt', 'left');
-    const [uRoadR] = uvForSurface('asphalt', 'right');
-    const corners = [
-      logicalCorner(world, chunk, { ...PARAMS, cols: 32 }, 0, c),
-      logicalCorner(world, chunk, { ...PARAMS, cols: 32 }, 0, c + 1),
-      logicalCorner(world, chunk, { ...PARAMS, cols: 32 }, 1, c),
-      logicalCorner(world, chunk, { ...PARAMS, cols: 32 }, 1, c + 1),
-    ];
-    for (const [x, y, z] of corners) {
-      const hits = findVertexIndicesAt(chunk.geometry, x, y, z);
-      for (const idx of hits) {
-        const [u] = uvAt(chunk.geometry, idx);
-        expect(u).not.toBeCloseTo(uRoadL, 5);
-        expect(u).not.toBeCloseTo(uRoadR, 5);
-      }
-    }
+  it('maps chunk seam rows to v=1 on chunk N and v=0 on chunk N+1', () => {
+    const world = new World('uvSeam');
+    const chunkN = bakeChunk(world, 0, PARAMS);
+    const chunkNext = bakeChunk(world, 1, PARAMS);
+    const lastRow = PARAMS.rowsPerChunk;
+    const col = 0;
+    const [xLast, yLast, zLast] = logicalCorner(world, chunkN, PARAMS, lastRow, col);
+    const [xFirst, yFirst, zFirst] = logicalCorner(world, chunkNext, PARAMS, 0, col);
+    const lastHits = findVertexIndicesAt(chunkN.geometry, xLast, yLast, zLast);
+    const firstHits = findVertexIndicesAt(chunkNext.geometry, xFirst, yFirst, zFirst);
+    const lastV = lastHits.map((idx) => uvAt(chunkN.geometry, idx)[1]);
+    const firstV = firstHits.map((idx) => uvAt(chunkNext.geometry, idx)[1]);
+    expect(lastV.some((v) => Math.abs(v - 1) < 1e-6)).toBe(true);
+    expect(firstV.some((v) => Math.abs(v - 0) < 1e-6)).toBe(true);
   });
 });

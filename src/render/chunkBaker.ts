@@ -2,12 +2,7 @@ import * as THREE from 'three';
 import type { World } from '../world/world.ts';
 import { cumulativeOffsetAt, prefixSum } from './bendMath.ts';
 import { worldXForSignedCol } from './meshLattice.ts';
-import { uvForSurface, type SurfaceKind } from './terrainSurface.ts';
-import {
-  makeSurfaceVariationNoise,
-  surfaceVertexColorMultiplierForQuad,
-  type TerrainSurfaceVariationParams,
-} from './terrainSurfaceVariation.ts';
+import { chunkLatticeUv } from './terrainSurface.ts';
 
 export interface ChunkParams {
   /** Number of row-intervals per chunk (each chunk owns `rowsPerChunk + 1` rows of vertices). */
@@ -20,8 +15,6 @@ export interface ChunkParams {
   roadColSpacing: number;
   /** Column spacing on X from signedCol ±1 outward. */
   landscapeColSpacing: number;
-  /** Pixelated vertex-color variation baked at chunk build time. */
-  surfaceVariation: TerrainSurfaceVariationParams;
 }
 
 /**
@@ -68,8 +61,6 @@ interface ScratchCorner {
   x: number;
   y: number;
   z: number;
-  u: number;
-  v: number;
 }
 
 /**
@@ -99,11 +90,8 @@ export function bakeChunk(world: World, chunkIndex: number, params: ChunkParams)
     bends[i] = world.bend.sample(rowStart + i);
   }
   const prefix = prefixSum(bends);
-  const surfaceNoise = makeSurfaceVariationNoise(world.getSeed());
-  const { surfaceVariation } = params;
 
   const scratchPositions: number[] = [];
-  const scratchUvs: number[] = [];
   const rowVtx: RowVerts[] = [];
 
   for (let r = 0; r < vertRows; r++) {
@@ -117,19 +105,18 @@ export function bakeChunk(world: World, chunkIndex: number, params: ChunkParams)
       const signedCol = c - centreCol;
       const x = worldXForSignedCol(signedCol, roadColSpacing, landscapeColSpacing) + phiLocal;
       const y = world.depth.sample(absRow, signedCol);
-      const side = signedCol < 0 ? 'left' : 'right';
 
       if (c === centreCol - 1) {
-        left[c] = pushScratchVertex(scratchPositions, scratchUvs, x, y, z, 'shoulder', 'left');
-        right[c] = pushScratchVertex(scratchPositions, scratchUvs, x, y, z, 'asphalt', 'left');
+        left[c] = pushScratchVertex(scratchPositions, x, y, z);
+        right[c] = pushScratchVertex(scratchPositions, x, y, z);
       } else if (c === centreCol) {
-        left[c] = pushScratchVertex(scratchPositions, scratchUvs, x, y, z, 'asphalt', 'left');
-        right[c] = pushScratchVertex(scratchPositions, scratchUvs, x, y, z, 'asphalt', 'right');
+        left[c] = pushScratchVertex(scratchPositions, x, y, z);
+        right[c] = pushScratchVertex(scratchPositions, x, y, z);
       } else if (c === centreCol + 1) {
-        left[c] = pushScratchVertex(scratchPositions, scratchUvs, x, y, z, 'asphalt', 'right');
-        right[c] = pushScratchVertex(scratchPositions, scratchUvs, x, y, z, 'shoulder', 'right');
+        left[c] = pushScratchVertex(scratchPositions, x, y, z);
+        right[c] = pushScratchVertex(scratchPositions, x, y, z);
       } else {
-        const idx = pushScratchVertex(scratchPositions, scratchUvs, x, y, z, 'shoulder', side);
+        const idx = pushScratchVertex(scratchPositions, x, y, z);
         left[c] = idx;
         right[c] = idx;
       }
@@ -140,7 +127,6 @@ export function bakeChunk(world: World, chunkIndex: number, params: ChunkParams)
 
   const positions: number[] = [];
   const uvs: number[] = [];
-  const colors: number[] = [];
   const indices: number[] = [];
 
   for (let r = 0; r < vertRows - 1; r++) {
@@ -152,22 +138,18 @@ export function bakeChunk(world: World, chunkIndex: number, params: ChunkParams)
       const ib = rowLo.left[c + 1] ?? 0;
       const ic = rowHi.right[c] ?? 0;
       const id = rowHi.left[c + 1] ?? 0;
-      const ca = readScratchCorner(scratchPositions, scratchUvs, ia);
-      const cb = readScratchCorner(scratchPositions, scratchUvs, ib);
-      const cc = readScratchCorner(scratchPositions, scratchUvs, ic);
-      const cd = readScratchCorner(scratchPositions, scratchUvs, id);
-      const mult = surfaceVertexColorMultiplierForQuad(
-        rowStart,
-        r,
-        c,
-        centreCol,
-        surfaceVariation,
-        surfaceNoise,
-      );
-      const a = emitColoredCorner(positions, uvs, colors, ca, mult);
-      const b = emitColoredCorner(positions, uvs, colors, cb, mult);
-      const ccIdx = emitColoredCorner(positions, uvs, colors, cc, mult);
-      const d = emitColoredCorner(positions, uvs, colors, cd, mult);
+      const ca = readScratchCorner(scratchPositions, ia);
+      const cb = readScratchCorner(scratchPositions, ib);
+      const cc = readScratchCorner(scratchPositions, ic);
+      const cd = readScratchCorner(scratchPositions, id);
+      const uv2a = chunkLatticeUv(r, c, 0, 0, rowsPerChunk, cols);
+      const uv2b = chunkLatticeUv(r, c, 1, 0, rowsPerChunk, cols);
+      const uv2c = chunkLatticeUv(r, c, 0, 1, rowsPerChunk, cols);
+      const uv2d = chunkLatticeUv(r, c, 1, 1, rowsPerChunk, cols);
+      const a = emitCorner(positions, uvs, ca, uv2a);
+      const b = emitCorner(positions, uvs, cb, uv2b);
+      const ccIdx = emitCorner(positions, uvs, cc, uv2c);
+      const d = emitCorner(positions, uvs, cd, uv2d);
       indices.push(a, ccIdx, b, b, ccIdx, d);
     }
   }
@@ -175,7 +157,6 @@ export function bakeChunk(world: World, chunkIndex: number, params: ChunkParams)
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
 
@@ -184,44 +165,29 @@ export function bakeChunk(world: World, chunkIndex: number, params: ChunkParams)
   return { chunkIndex, rowStart, rowEnd, phiLocalSpan, bends, prefix, geometry };
 }
 
-function pushScratchVertex(
-  positions: number[],
-  uvs: number[],
-  x: number,
-  y: number,
-  z: number,
-  surface: SurfaceKind,
-  side: 'left' | 'right',
-): number {
+function pushScratchVertex(positions: number[], x: number, y: number, z: number): number {
   const idx = positions.length / 3;
   positions.push(x, y, z);
-  const [u, v] = uvForSurface(surface, side);
-  uvs.push(u, v);
   return idx;
 }
 
-function readScratchCorner(positions: number[], uvs: number[], idx: number): ScratchCorner {
+function readScratchCorner(positions: number[], idx: number): ScratchCorner {
   const i = idx * 3;
-  const j = idx * 2;
   return {
     x: positions[i] ?? 0,
     y: positions[i + 1] ?? 0,
     z: positions[i + 2] ?? 0,
-    u: uvs[j] ?? 0,
-    v: uvs[j + 1] ?? 0,
   };
 }
 
-function emitColoredCorner(
+function emitCorner(
   positions: number[],
   uvs: number[],
-  colors: number[],
   corner: ScratchCorner,
-  mult: number,
+  uv: [number, number],
 ): number {
   const idx = positions.length / 3;
   positions.push(corner.x, corner.y, corner.z);
-  uvs.push(corner.u, corner.v);
-  colors.push(mult, mult, mult);
+  uvs.push(uv[0], uv[1]);
   return idx;
 }

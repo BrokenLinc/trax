@@ -5,8 +5,10 @@ export const SHOULDER_RGB = { r: 0x8a, g: 0xa0, b: 0xd6 } as const;
 /** Central road strip. */
 export const ASPHALT_RGB = { r: 0x5a, g: 0x5c, b: 0x62 } as const;
 
-/** Atlas width: shoulder | road | road | shoulder, centred on the odd column grid. */
-export const SURFACE_ATLAS_WIDTH = 4;
+/** Chunk-fill surface image resolution (`public/terrain-chunk-surface.png`). */
+export const CHUNK_SURFACE_SIZE = 1024;
+
+const CHUNK_SURFACE_URL = '/terrain-chunk-surface.png';
 
 export type SurfaceKind = 'asphalt' | 'shoulder';
 
@@ -23,39 +25,43 @@ export function asphaltSideForQuad(c: number, centreCol: number): 'left' | 'righ
 }
 
 /**
- * UV at texel centre for the 4×1 atlas. `side` picks the left/right shoulder
- * or the left/right road texel so the strip stays centred on `centreCol`.
+ * UV for a quad corner in chunk lattice space. Maps the full chunk surface image
+ * once (0–1) with road centred on the column grid; warps with bent quads.
  */
-export function uvForSurface(kind: SurfaceKind, side: 'left' | 'right' = 'left'): [number, number] {
-  const w = SURFACE_ATLAS_WIDTH;
-  const u =
-    kind === 'shoulder'
-      ? side === 'left'
-        ? 0.5 / w
-        : 3.5 / w
-      : side === 'left'
-        ? 1.5 / w
-        : 2.5 / w;
-  return [u, 0.5];
+export function chunkLatticeUv(
+  quadRow: number,
+  quadCol: number,
+  cornerDu: 0 | 1,
+  cornerDv: 0 | 1,
+  rowsPerChunk: number,
+  cols: number,
+): [number, number] {
+  const quadCols = cols - 1;
+  return [(quadCol + cornerDu) / quadCols, (quadRow + cornerDv) / rowsPerChunk];
 }
 
-/** Nearest-filtered strip atlas; swap pixels or replace with a loaded PNG later. */
-export function createTerrainSurfaceTexture(): THREE.DataTexture {
-  const pixel = (rgb: { readonly r: number; readonly g: number; readonly b: number }) =>
-    [rgb.r, rgb.g, rgb.b, 255] as const;
-  const data = new Uint8Array([
-    ...pixel(SHOULDER_RGB),
-    ...pixel(ASPHALT_RGB),
-    ...pixel(ASPHALT_RGB),
-    ...pixel(SHOULDER_RGB),
-  ]);
-  const tex = new THREE.DataTexture(data, SURFACE_ATLAS_WIDTH, 1, THREE.RGBAFormat);
-  tex.generateMipmaps = false;
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
+function applyChunkSurfaceSettings(tex: THREE.Texture): THREE.Texture {
+  tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
   return tex;
+}
+
+/** Shared chunk-fill surface map from `public/terrain-chunk-surface.png`. */
+export function createChunkSurfaceTexture(onLoad?: () => void): THREE.Texture {
+  const tex = new THREE.TextureLoader().load(
+    CHUNK_SURFACE_URL,
+    (loaded) => {
+      applyChunkSurfaceSettings(loaded);
+      onLoad?.();
+    },
+    undefined,
+    (err) => {
+      console.error('[terrainSurface] failed to load chunk surface PNG', err);
+    },
+  );
+  return applyChunkSurfaceSettings(tex);
 }
