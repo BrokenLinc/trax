@@ -18,6 +18,13 @@ export default defineConfig({
   base: './',
   clearScreen: false,
   server,
+  // Vite's default localhost bind is IPv6-only on this machine, so
+  // http://127.0.0.1:4173 (what the headless scripts use) is refused.
+  preview: {
+    host: '127.0.0.1',
+    port: 4173,
+    strictPort: true,
+  },
   build: {
     target: 'es2022',
     sourcemap: true,

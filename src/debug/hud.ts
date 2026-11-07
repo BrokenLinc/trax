@@ -39,6 +39,10 @@ export class Hud {
     parent.appendChild(this.el);
   }
 
+  setVisible(on: boolean): void {
+    this.el.style.display = on ? '' : 'none';
+  }
+
   update(m: HudModel): void {
     this.el.textContent = [
       `fps        ${m.fps.toFixed(0).padStart(4)}${m.paused ? '  [paused]' : ''}${m.headless ? '  [headless]' : ''}`,
@@ -49,9 +53,6 @@ export class Hud {
       `player Y   ${m.playerY.toFixed(3)}`,
       `row        ${m.rowFloor} + ${m.rowFrac.toFixed(3)}`,
       `bend@row   ${m.bendAtPlayer.toFixed(3)}`,
-      ``,
-      `[W/↑] forward  [S/↓] reverse  [A/←][D/→] strafe  [Shift] boost`,
-      `[Space] pause  [R] reseed  [G] wireframe  [V] top-down`,
     ].join('\n');
   }
 

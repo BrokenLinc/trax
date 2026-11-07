@@ -1,6 +1,7 @@
 node_modules
 dist
 artifacts
+art-history
 coverage
 src-tauri/target
 src-tauri/gen

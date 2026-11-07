@@ -1,5 +1,6 @@
 import type { App } from '../app.ts';
 import type { Mode7DefaultsSnapshot } from '../mode7Defaults.ts';
+import { whenTexturesReady } from '../render/loadTexture.ts';
 
 export interface Mode7CameraDiagnose {
   /** Guidance for interpreting the numeric block (screen-centre vs lane, A/B hints). */
@@ -61,7 +62,8 @@ export interface Mode7CameraDiagnose {
  * are plain objects (no Three.js refs leak across the boundary).
  */
 export interface Mode7Inspector {
-  ready: true;
+  /** False until color textures have loaded. Snapshots wait on this. */
+  ready: boolean;
   getState(): Mode7State;
   setSeed(seed: string): void;
   setDistance(distance: number): void;
@@ -126,7 +128,7 @@ declare global {
 
 export function installInspector(app: App): Mode7Inspector {
   const api: Mode7Inspector = {
-    ready: true,
+    ready: false,
     getState: () => app.getState(),
     setSeed: (seed) => app.setSeed(seed),
     setDistance: (d) => app.setDistance(d),
@@ -143,5 +145,9 @@ export function installInspector(app: App): Mode7Inspector {
     screenshot: () => app.screenshot(),
   };
   window.__MODE7__ = api;
+  void whenTexturesReady().then(() => {
+    app.tick(0);
+    api.ready = true;
+  });
   return api;
 }

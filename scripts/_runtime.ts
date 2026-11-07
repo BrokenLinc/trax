@@ -1,9 +1,10 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium, type Browser, type Page } from 'playwright';
+import type { Browser, Page } from 'playwright';
 
 import type { Mode7Inspector } from '../src/debug/inspector.ts';
 
@@ -22,10 +23,14 @@ export async function withPreviewPage<T>(
   args: { seed: string; distance: number; extraQuery?: string },
   body: (page: Page, mode7: Mode7Tunnel) => Promise<T>,
 ): Promise<T> {
+  ensurePlaywrightBrowsers();
   await ensureBuild();
   const server = await startPreviewServer();
   let browser: Browser | null = null;
   try {
+    // Import after the browser path is corrected. Playwright reads
+    // PLAYWRIGHT_BROWSERS_PATH when the module loads, not at launch.
+    const { chromium } = await import('playwright');
     browser = await chromium.launch({ headless: true });
     const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
     const page = await context.newPage();
@@ -96,6 +101,25 @@ function makeTunnel(page: Page): Mode7Tunnel {
         { frames, dt },
       ),
   };
+}
+
+function directoryHasBrowser(root: string | undefined): boolean {
+  if (!root || !existsSync(root)) return false;
+  try {
+    return readdirSync(root).some((name) => name.startsWith('chromium'));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Cursor's sandbox points PLAYWRIGHT_BROWSERS_PATH at a cache directory
+ * that exists but has no browser build. Prefer the real user cache.
+ */
+function ensurePlaywrightBrowsers(): void {
+  if (directoryHasBrowser(process.env['PLAYWRIGHT_BROWSERS_PATH'])) return;
+  const fallback = resolve(homedir(), 'Library/Caches/ms-playwright');
+  if (directoryHasBrowser(fallback)) process.env['PLAYWRIGHT_BROWSERS_PATH'] = fallback;
 }
 
 async function ensureBuild(): Promise<void> {

@@ -3,6 +3,7 @@ import { MODE7_DEFAULTS } from '../mode7Defaults.ts';
 import type { World } from '../world/world.ts';
 import { prefixSum, rebuildOffsetsTangentAligned } from './bendMath.ts';
 import { ChunkStreamer } from './chunkStreamer.ts';
+import { createGroundTexture, createTerrainMaterial } from './terrainMaterial.ts';
 import { createChunkSurfaceTexture } from './terrainSurface.ts';
 import { WorldFrame } from './worldFrame.ts';
 
@@ -72,6 +73,7 @@ export class TerrainMesh {
   private readonly streamer: ChunkStreamer;
   private readonly material: THREE.MeshStandardMaterial;
   private readonly surfaceTexture: THREE.Texture;
+  private readonly groundTexture: THREE.Texture;
   private readonly wireMaterial: THREE.MeshBasicMaterial;
   private bends: Float32Array;
   private prefix: Float32Array;
@@ -90,15 +92,8 @@ export class TerrainMesh {
     this.rowCount = this.params.rowsAhead + this.params.rowsBehind + 1;
 
     this.surfaceTexture = createChunkSurfaceTexture();
-    this.surfaceTexture.anisotropy = 1;
-    this.material = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      map: this.surfaceTexture,
-      roughness: 0.85,
-      metalness: 0.05,
-      flatShading: true,
-      side: THREE.DoubleSide,
-    });
+    this.groundTexture = createGroundTexture();
+    this.material = createTerrainMaterial(this.surfaceTexture, this.groundTexture);
     this.wireMaterial = new THREE.MeshBasicMaterial({
       color: 0x9fc7ff,
       wireframe: true,
@@ -229,6 +224,14 @@ export class TerrainMesh {
     );
   }
 
+  /**
+   * Centreline X at `row`, in the same anchor frame as the loaded chunks.
+   * Null when that row's chunk is not loaded yet.
+   */
+  worldXAtRow(row: number): number | null {
+    return this.streamer.worldXAtRow(row);
+  }
+
   getWindowRowStart(playerRow: number): number {
     return Math.floor(playerRow) - this.params.rowsBehind;
   }
@@ -247,6 +250,7 @@ export class TerrainMesh {
     this.streamer.dispose();
     this.material.dispose();
     this.surfaceTexture.dispose();
+    this.groundTexture.dispose();
     this.wireMaterial.dispose();
   }
 }

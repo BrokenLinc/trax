@@ -170,10 +170,18 @@ export class ChunkStreamer {
    * yet (caller should always `update()` first).
    */
   getPlayerWorldX(playerRow: number): number {
-    const chunk = this.getChunkContaining(playerRow);
-    if (!chunk) return 0;
+    return this.worldXAtRow(playerRow) ?? 0;
+  }
+
+  /**
+   * Centreline X at an absolute row, in the loaded chunks' anchor frame.
+   * Null when the chunk for that row is not loaded.
+   */
+  worldXAtRow(row: number): number | null {
+    const chunk = this.getChunkContaining(row);
+    if (!chunk) return null;
     const phiLocal = cumulativeOffsetAt(
-      playerRow,
+      row,
       chunk.baked.rowStart,
       chunk.baked.bends,
       chunk.baked.prefix,

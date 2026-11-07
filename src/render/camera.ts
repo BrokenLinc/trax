@@ -22,8 +22,9 @@ export interface ChaseCameraParams {
 export const DEFAULT_CAMERA: ChaseCameraParams = MODE7_DEFAULTS.camera;
 
 /**
- * Vertical offset from the ground sample to the player sphere's centre.
- * Mirrors `DEFAULT_PLAYER_MESH.radius` in `playerMesh.ts`.
+ * Vertical offset from the ground sample to the chase rig's player centre.
+ * Hip height: the rider card stands on the ground, and this keeps the aim
+ * line from scraping the road.
  */
 export const SPHERE_CENTRE_OFFSET = 0.5;
 
@@ -38,6 +39,12 @@ export interface ChaseRig {
   eye: THREE.Vector3;
   aim: THREE.Vector3;
 }
+
+/**
+ * `aim` looks at a point down the road and pitches with the hills.
+ * `level` sits behind the player and faces world −Z, so the view stays flat.
+ */
+export type CameraMode = 'aim' | 'level';
 
 const _playerCentre = new THREE.Vector3();
 const _aimCentre = new THREE.Vector3();
@@ -82,12 +89,32 @@ export function computeChaseRig(
 }
 
 /**
+ * Stabilized chase rig. The eye is a fixed offset behind and above the
+ * player, and the aim is one metre straight ahead at the same height, so
+ * a rise or dip down the road cannot pitch the camera.
+ */
+export function computeLevelRig(
+  playerGroundY: number,
+  params: ChaseCameraParams,
+  out: ChaseRig = { eye: new THREE.Vector3(), aim: new THREE.Vector3() },
+): ChaseRig {
+  const py = Number.isFinite(playerGroundY) ? playerGroundY : 0;
+  const eyeY = py + SPHERE_CENTRE_OFFSET + params.height;
+  const eyeZ = Math.max(0, params.back);
+  out.eye.set(0, eyeY, eyeZ);
+  out.aim.set(0, eyeY, eyeZ - 1);
+  return out;
+}
+
+/**
  * Chase camera: looks at a terrain-following aim point ahead of the player;
  * the eye sits behind the player on the line through both sphere centres.
+ * In `level` mode the camera faces world −Z instead.
  */
 export class ChaseCamera {
   readonly camera: THREE.PerspectiveCamera;
   private params: ChaseCameraParams;
+  private mode: CameraMode = 'aim';
   private readonly rig: ChaseRig = { eye: new THREE.Vector3(), aim: new THREE.Vector3() };
 
   constructor(aspect: number, initial?: ChaseCameraParams) {
@@ -110,6 +137,19 @@ export class ChaseCamera {
     return this.params;
   }
 
+  getMode(): CameraMode {
+    return this.mode;
+  }
+
+  setMode(mode: CameraMode): void {
+    this.mode = mode;
+  }
+
+  toggleMode(): CameraMode {
+    this.mode = this.mode === 'aim' ? 'level' : 'aim';
+    return this.mode;
+  }
+
   setAspect(aspect: number): void {
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
@@ -125,6 +165,13 @@ export class ChaseCamera {
 
   update(ctx: ChaseRigUpdate): void {
     const p = this.params;
+    if (this.mode === 'level') {
+      computeLevelRig(ctx.playerGroundY, p, this.rig);
+      this.camera.position.copy(this.rig.eye);
+      this.camera.up.copy(_up);
+      this.camera.quaternion.identity();
+      return;
+    }
     computeChaseRig(ctx.playerGroundY, ctx.distance, ctx.world, p, ctx.rowSpacing, this.rig);
     _eye.copy(this.rig.eye);
     _aim.copy(this.rig.aim);

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { World } from '../src/world/world.ts';
 import {
   computeChaseRig,
+  computeLevelRig,
   SPHERE_CENTRE_OFFSET,
   type ChaseCameraParams,
 } from '../src/render/camera.ts';
@@ -64,6 +65,16 @@ describe('computeChaseRig', () => {
     expect(raised.eye.y - base.eye.y).toBeCloseTo(PARAMS.height, 5);
     expect(raised.eye.x).toBeCloseTo(base.eye.x, 5);
     expect(raised.eye.z).toBeCloseTo(base.eye.z, 5);
+  });
+
+  it('keeps a level camera facing −Z at a fixed height above the player', () => {
+    const rig = computeLevelRig(3, PARAMS);
+    expect(rig.eye.x).toBe(0);
+    expect(rig.eye.z).toBeCloseTo(PARAMS.back, 5);
+    expect(rig.eye.y).toBeCloseTo(3 + SPHERE_CENTRE_OFFSET + PARAMS.height, 5);
+    expect(rig.aim.x).toBe(0);
+    expect(rig.aim.y).toBeCloseTo(rig.eye.y, 5);
+    expect(rig.aim.z).toBeCloseTo(rig.eye.z - 1, 5);
   });
 
   it('collapses aim onto the player row when aheadMeters is 0', () => {

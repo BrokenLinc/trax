@@ -43,37 +43,40 @@ export const MODE7_DEFAULTS: {
   player: PlayerParams;
 } = {
   depth: {
-    // Broader, gentler hills: lower frequency stretches features, fewer octaves
-    // and lower gain strip out the high-frequency crinkles.
-    frequency: 0.002,
-    amplitude: 320.85,
-    octaves: 3,
-    lacunarity: 1.5,
-    gain: 2,
-    roadDatumPull: 0.3,
-    shoulderBlendColumns: 5,
+    // Rolling forested hills: a few hundred metres between crests, tens of
+    // metres tall, with the high-frequency crinkle turned down.
+    frequency: 0.013,
+    amplitude: 38,
+    octaves: 2,
+    lacunarity: 2,
+    gain: 0.5,
+    roadDatumPull: 0.48,
+    shoulderBlendColumns: 2,
   },
   bend: {
-    // Longer sweeping curves with a small amplitude — gentle winding rather
-    // than switchbacks. Per-row slope is the dominant turbulence knob.
+    // Highway bends. Slope change has to stay inside full-lock strafe,
+    // or the bike is thrown off the asphalt no matter how hard you steer.
     frequency: 0.005,
-    amplitude: 3.84,
-    detailWeight: 0,
-    detailFrequency: 0.005,
+    amplitude: 2.6,
+    detailWeight: 0.1,
+    detailFrequency: 0.008,
   },
   camera: {
-    aheadMeters: 80,
-    aimElevation: 1,
-    height: 2.6,
-    back: 6.5,
-    fov: 60,
-    near: 0.1,
-    far: 1051,
+    aheadMeters: 52,
+    aimElevation: 1.7,
+    height: 2.7,
+    back: 6.6,
+    fov: 48,
+    near: 0.12,
+    far: 900,
   },
   fog: {
-    color: 0x0a0d18,
-    near: 0,
-    far: 1137,
+    // The hazy mountain band on the horizon card. Hills fade into that
+    // colour, not the sky. When the backdrop changes, use the mountain
+    // sample `process-art` prints and put it here.
+    color: 0x91a1ba,
+    near: 80,
+    far: 460,
   },
   terrain: {
     rowSpacing: 4,
@@ -84,9 +87,9 @@ export const MODE7_DEFAULTS: {
     y: -147.5,
   },
   player: {
-    strafeSpeedFactor: 0.13,
-    strafeAccel: 120,
-    driftFactor: 6,
+    strafeSpeedFactor: 0.24,
+    strafeAccel: 220,
+    driftFactor: 4,
   },
 };
 
@@ -117,8 +120,8 @@ function hexLiteral(n: number): string {
 
 function formatDepthInner(p: DepthMapParams): string {
   return [
-    `    // Broader, gentler hills: lower frequency stretches features, fewer octaves`,
-    `    // and lower gain strip out the high-frequency crinkles.`,
+    `    // Rolling forested hills: a few hundred metres between crests, tens of`,
+    `    // metres tall, with the high-frequency crinkle turned down.`,
     `    frequency: ${numLiteral(p.frequency)},`,
     `    amplitude: ${numLiteral(p.amplitude)},`,
     `    octaves: ${numLiteral(p.octaves)},`,
@@ -131,8 +134,7 @@ function formatDepthInner(p: DepthMapParams): string {
 
 function formatBendInner(p: BendFieldParams): string {
   return [
-    `    // Longer sweeping curves with a small amplitude — gentle winding rather`,
-    `    // than switchbacks. Per-row slope is the dominant turbulence knob.`,
+    `    // Highway bends. Slope change stays inside full-lock strafe.`,
     `    frequency: ${numLiteral(p.frequency)},`,
     `    amplitude: ${numLiteral(p.amplitude)},`,
     `    detailWeight: ${numLiteral(p.detailWeight)},`,
@@ -154,6 +156,7 @@ function formatCameraInner(p: ChaseCameraParams): string {
 
 function formatFogInner(p: SceneFogParams): string {
   return [
+    `    // Match the hazy mountain band on the horizon card, not the sky.`,
     `    color: ${hexLiteral(p.color)},`,
     `    near: ${numLiteral(p.near)},`,
     `    far: ${numLiteral(p.far)},`,

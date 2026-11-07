@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { cumulativeOffsetAt } from '../src/render/bendMath.ts';
 import { bakeChunk, type ChunkParams } from '../src/render/chunkBaker.ts';
 import { worldXForSignedCol } from '../src/render/meshLattice.ts';
-import { chunkLatticeUv, isAsphaltQuad } from '../src/render/terrainSurface.ts';
+import {
+  ASPHALT_U_MIN,
+  chunkCrossSectionU,
+  chunkLatticeV,
+  isAsphaltQuad,
+} from '../src/render/terrainSurface.ts';
 import { World } from '../src/world/world.ts';
 
 const PARAMS: ChunkParams = {
@@ -229,29 +234,42 @@ describe('bakeChunk — guard rails', () => {
   });
 });
 
-describe('bakeChunk — chunk-fill lattice UVs', () => {
-  it('exposes uv attribute with one entry per vertex and no color attribute', () => {
+describe('bakeChunk — road-aligned surface UVs', () => {
+  it('exposes uv, groundUv, and a per-vertex hill tint', () => {
     const world = new World('uvSpec');
     const chunk = bakeChunk(world, 0, PARAMS);
     const vertCount = vertsPerChunk(PARAMS.rowsPerChunk, PARAMS.cols);
     expect(uvs(chunk.geometry).length).toBe(vertCount * 2);
-    expect(chunk.geometry.getAttribute('color')).toBeUndefined();
+    const color = chunk.geometry.getAttribute('color');
+    const ground = chunk.geometry.getAttribute('groundUv');
+    expect(color).toBeDefined();
+    expect(ground).toBeDefined();
+    expect(color?.count).toBe(vertCount);
+    expect(ground?.count).toBe(vertCount);
   });
 
-  it('spans lattice UVs across each quad', () => {
+  it('puts the road edge on the asphalt band and keeps one V repeat per chunk', () => {
     const world = new World('uvSpan');
     const chunk = bakeChunk(world, 0, PARAMS);
-    const verts = quadCornerIndices(chunk.geometry, 0, 0, PARAMS.cols);
+    const cols = PARAMS.cols;
+    const centre = Math.floor(cols / 2);
+    const [x, y, z] = logicalCorner(world, chunk, PARAMS, 0, centre - 1);
+    const hits = findVertexIndicesAt(chunk.geometry, x, y, z);
+    expect(hits.length).toBeGreaterThan(0);
+    for (const idx of hits) {
+      const [u, v] = uvAt(chunk.geometry, idx);
+      expect(u).toBeCloseTo(ASPHALT_U_MIN, 5);
+      expect(v).toBeCloseTo(chunkLatticeV(0, 0, PARAMS.rowsPerChunk), 6);
+    }
+
+    const verts = quadCornerIndices(chunk.geometry, 0, 0, cols);
     expect(verts.length).toBe(4);
-    const uValues = verts.map((idx) => uvAt(chunk.geometry, idx)[0]);
     const vValues = verts.map((idx) => uvAt(chunk.geometry, idx)[1]);
-    expect(Math.min(...uValues)).toBeCloseTo(0, 6);
-    expect(Math.max(...uValues)).toBeCloseTo(0.25, 6);
     expect(Math.min(...vValues)).toBeCloseTo(0, 6);
     expect(Math.max(...vValues)).toBeCloseTo(1 / PARAMS.rowsPerChunk, 6);
   });
 
-  it('assigns chunkLatticeUv at road quad corners', () => {
+  it('samples cross-section U from road-local X, not the bend offset', () => {
     const world = new World('uvSpec');
     const params = { ...PARAMS, cols: 33 };
     const chunk = bakeChunk(world, 0, params);
@@ -259,12 +277,16 @@ describe('bakeChunk — chunk-fill lattice UVs', () => {
     const centre = Math.floor(cols / 2);
     const c = centre - 1;
     expect(isAsphaltQuad(c, centre)).toBe(true);
-    const expected = chunkLatticeUv(0, c, 0, 0, params.rowsPerChunk, cols);
+    const localX = worldXForSignedCol(-1, params.roadColSpacing, params.landscapeColSpacing);
+    const expectedU = chunkCrossSectionU(localX, params.roadColSpacing, params.landscapeColSpacing);
     const [x, y, z] = logicalCorner(world, chunk, params, 0, c);
     const hits = findVertexIndicesAt(chunk.geometry, x, y, z);
     const matched = hits.some((idx) => {
       const [u, v] = uvAt(chunk.geometry, idx);
-      return Math.abs(u - expected[0]) < 1e-6 && Math.abs(v - expected[1]) < 1e-6;
+      return (
+        Math.abs(u - expectedU) < 1e-5 &&
+        Math.abs(v - chunkLatticeV(0, 0, params.rowsPerChunk)) < 1e-6
+      );
     });
     expect(matched).toBe(true);
   });

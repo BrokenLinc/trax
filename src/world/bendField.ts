@@ -54,7 +54,9 @@ export class BendField {
   /** Signed per-row sideways delta (in world units) for integer `row`. */
   sample(row: number): number {
     const p = this.params;
-    const broad = this.noise(row * p.frequency, 0);
+    // Phase keeps row 0 out of the flat basin this seed has at the origin,
+    // so the road is already bending under the rider at distance 0.
+    const broad = this.noise(row * p.frequency + 1.6, 0);
     const detail = this.noise(row * p.detailFrequency, 17.31);
     return p.amplitude * (broad + p.detailWeight * detail);
   }

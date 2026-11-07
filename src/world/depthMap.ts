@@ -90,7 +90,12 @@ export class DepthMap {
 
   private rawFbm(row: number, col: number): number {
     const p = this.params;
-    return fbm2D(this.noise, row * p.frequency, col * p.frequency, {
+    // Rows are 4 m apart and columns are ~50 m apart, but both axes used to
+    // share one frequency in index space, so a hillside could not appear
+    // beside the road. Stretch the column axis so the shoulders can rise
+    // inside the chase view. The centreline (col 0) is unchanged.
+    const columnStretch = 7;
+    return fbm2D(this.noise, row * p.frequency, col * p.frequency * columnStretch, {
       octaves: p.octaves,
       lacunarity: p.lacunarity,
       gain: p.gain,

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { World } from '../world/world.ts';
 import { cumulativeOffsetAt, prefixSum } from './bendMath.ts';
 import { worldXForSignedCol } from './meshLattice.ts';
-import { chunkLatticeUv } from './terrainSurface.ts';
+import { chunkCrossSectionU, chunkLatticeV, hillTint } from './terrainSurface.ts';
 
 export interface ChunkParams {
   /** Number of row-intervals per chunk (each chunk owns `rowsPerChunk + 1` rows of vertices). */
@@ -127,6 +127,8 @@ export function bakeChunk(world: World, chunkIndex: number, params: ChunkParams)
 
   const positions: number[] = [];
   const uvs: number[] = [];
+  const groundUvs: number[] = [];
+  const colors: number[] = [];
   const indices: number[] = [];
 
   for (let r = 0; r < vertRows - 1; r++) {
@@ -142,14 +144,70 @@ export function bakeChunk(world: World, chunkIndex: number, params: ChunkParams)
       const cb = readScratchCorner(scratchPositions, ib);
       const cc = readScratchCorner(scratchPositions, ic);
       const cd = readScratchCorner(scratchPositions, id);
-      const uv2a = chunkLatticeUv(r, c, 0, 0, rowsPerChunk, cols);
-      const uv2b = chunkLatticeUv(r, c, 1, 0, rowsPerChunk, cols);
-      const uv2c = chunkLatticeUv(r, c, 0, 1, rowsPerChunk, cols);
-      const uv2d = chunkLatticeUv(r, c, 1, 1, rowsPerChunk, cols);
-      const a = emitCorner(positions, uvs, ca, uv2a);
-      const b = emitCorner(positions, uvs, cb, uv2b);
-      const ccIdx = emitCorner(positions, uvs, cc, uv2c);
-      const d = emitCorner(positions, uvs, cd, uv2d);
+      const phiLo = cumulativeOffsetAt(rowStart + r, rowStart, bends, prefix);
+      const phiHi = cumulativeOffsetAt(rowStart + r + 1, rowStart, bends, prefix);
+      const zAbsLo = -(rowStart + r) * rowSpacing;
+      const zAbsHi = -(rowStart + r + 1) * rowSpacing;
+      const lxA = ca.x - phiLo;
+      const lxB = cb.x - phiLo;
+      const lxC = cc.x - phiHi;
+      const lxD = cd.x - phiHi;
+      const uv2a: [number, number] = [
+        chunkCrossSectionU(lxA, roadColSpacing, landscapeColSpacing),
+        chunkLatticeV(r, 0, rowsPerChunk),
+      ];
+      const uv2b: [number, number] = [
+        chunkCrossSectionU(lxB, roadColSpacing, landscapeColSpacing),
+        chunkLatticeV(r, 0, rowsPerChunk),
+      ];
+      const uv2c: [number, number] = [
+        chunkCrossSectionU(lxC, roadColSpacing, landscapeColSpacing),
+        chunkLatticeV(r, 1, rowsPerChunk),
+      ];
+      const uv2d: [number, number] = [
+        chunkCrossSectionU(lxD, roadColSpacing, landscapeColSpacing),
+        chunkLatticeV(r, 1, rowsPerChunk),
+      ];
+      const a = emitCorner(
+        positions,
+        uvs,
+        groundUvs,
+        colors,
+        ca,
+        uv2a,
+        [lxA, zAbsLo],
+        hillTint(ca.y, lxA, roadColSpacing),
+      );
+      const b = emitCorner(
+        positions,
+        uvs,
+        groundUvs,
+        colors,
+        cb,
+        uv2b,
+        [lxB, zAbsLo],
+        hillTint(cb.y, lxB, roadColSpacing),
+      );
+      const ccIdx = emitCorner(
+        positions,
+        uvs,
+        groundUvs,
+        colors,
+        cc,
+        uv2c,
+        [lxC, zAbsHi],
+        hillTint(cc.y, lxC, roadColSpacing),
+      );
+      const d = emitCorner(
+        positions,
+        uvs,
+        groundUvs,
+        colors,
+        cd,
+        uv2d,
+        [lxD, zAbsHi],
+        hillTint(cd.y, lxD, roadColSpacing),
+      );
       indices.push(a, ccIdx, b, b, ccIdx, d);
     }
   }
@@ -157,6 +215,8 @@ export function bakeChunk(world: World, chunkIndex: number, params: ChunkParams)
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setAttribute('groundUv', new THREE.Float32BufferAttribute(groundUvs, 2));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
 
@@ -183,11 +243,17 @@ function readScratchCorner(positions: number[], idx: number): ScratchCorner {
 function emitCorner(
   positions: number[],
   uvs: number[],
+  groundUvs: number[],
+  colors: number[],
   corner: ScratchCorner,
   uv: [number, number],
+  groundUv: [number, number],
+  tint: [number, number, number],
 ): number {
   const idx = positions.length / 3;
   positions.push(corner.x, corner.y, corner.z);
   uvs.push(uv[0], uv[1]);
+  groundUvs.push(groundUv[0], groundUv[1]);
+  colors.push(tint[0], tint[1], tint[2]);
   return idx;
 }

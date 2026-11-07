@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  ASPHALT_U_MAX,
+  ASPHALT_U_MIN,
   asphaltSideForQuad,
   CHUNK_SURFACE_SIZE,
-  chunkLatticeUv,
+  chunkCrossSectionU,
+  chunkLatticeV,
+  hillTint,
   isAsphaltQuad,
 } from '../src/render/terrainSurface.ts';
 
@@ -23,13 +27,39 @@ describe('terrainSurface', () => {
     expect(asphaltSideForQuad(centre, centre)).toBe('right');
   });
 
-  it('maps quad corners to lattice UVs spanning 0–1 across the chunk', () => {
+  it('maps chunk rows onto one V repeat', () => {
     const rowsPerChunk = 8;
-    const cols = 5;
-    expect(chunkLatticeUv(0, 0, 0, 0, rowsPerChunk, cols)).toEqual([0, 0]);
-    expect(chunkLatticeUv(0, 0, 1, 0, rowsPerChunk, cols)).toEqual([0.25, 0]);
-    expect(chunkLatticeUv(0, 0, 0, 1, rowsPerChunk, cols)).toEqual([0, 0.125]);
-    expect(chunkLatticeUv(rowsPerChunk - 1, cols - 2, 1, 1, rowsPerChunk, cols)).toEqual([1, 1]);
+    expect(chunkLatticeV(0, 0, rowsPerChunk)).toBe(0);
+    expect(chunkLatticeV(0, 1, rowsPerChunk)).toBe(0.125);
+    expect(chunkLatticeV(rowsPerChunk - 1, 1, rowsPerChunk)).toBe(1);
+  });
+
+  it('aligns asphalt with the road and stretches each shoulder across one landscape column', () => {
+    const road = 6;
+    const landscape = 50;
+    const center = (ASPHALT_U_MIN + ASPHALT_U_MAX) / 2;
+    expect(chunkCrossSectionU(0, road, landscape)).toBeCloseTo(center, 6);
+    expect(chunkCrossSectionU(-road, road, landscape)).toBeCloseTo(ASPHALT_U_MIN, 6);
+    expect(chunkCrossSectionU(road, road, landscape)).toBeCloseTo(ASPHALT_U_MAX, 6);
+    expect(chunkCrossSectionU(-(road + landscape), road, landscape)).toBeCloseTo(0, 6);
+    expect(chunkCrossSectionU(road + landscape, road, landscape)).toBeCloseTo(1, 6);
+    expect(chunkCrossSectionU(-(road + landscape / 2), road, landscape)).toBeCloseTo(
+      ASPHALT_U_MIN / 2,
+      6,
+    );
+    expect(chunkCrossSectionU(-(road + landscape * 3), road, landscape)).toBe(0);
+    expect(chunkCrossSectionU(road + landscape * 3, road, landscape)).toBe(1);
+  });
+
+  it('keeps the road tint neutral and cools a valley off the shoulder', () => {
+    const [r, g, b] = hillTint(0, 0, 6);
+    expect(r).toBeCloseTo(1, 5);
+    expect(g).toBeCloseTo(1, 5);
+    expect(b).toBeCloseTo(1, 5);
+    const valley = hillTint(-8, 40, 6);
+    const crest = hillTint(24, 40, 6);
+    expect(valley[0]).toBeLessThan(0.85);
+    expect(crest[0]).toBeGreaterThan(valley[0]);
   });
 
   it('ships a 1024×1024 chunk surface PNG in public/', () => {

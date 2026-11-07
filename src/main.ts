@@ -6,6 +6,7 @@ import { bootstrap } from './app.ts';
  *   ?distance=<number>  initial distance along the road (default 0)
  *   ?headless=1         disable rAF; advance only via window.__MODE7__.tick()
  *   ?noTopdown=1        skip inset top-down pass (debug chase-only viewport).
+ *   ?noDebug=1          hide axes, centre line, and aim marker.
  *
  * Headless mode is what the snapshot/introspect/perf scripts use to drive
  * the demo deterministically from Playwright.
@@ -15,6 +16,7 @@ function readParams(): {
   distance: number;
   headless: boolean;
   skipTopdown: boolean;
+  hideDebug: boolean;
 } {
   const url = new URL(window.location.href);
   const seed = url.searchParams.get('seed') ?? 'mode7';
@@ -22,11 +24,13 @@ function readParams(): {
   const distance = distanceRaw === null ? 0 : Number(distanceRaw);
   const headless = url.searchParams.get('headless') === '1';
   const skipTopdown = url.searchParams.get('noTopdown') === '1';
+  const hideDebug = url.searchParams.get('noDebug') === '1';
   return {
     seed,
     distance: Number.isFinite(distance) ? distance : 0,
     headless,
     skipTopdown,
+    hideDebug,
   };
 }
 
@@ -42,4 +46,5 @@ bootstrap({
   initialDistance: params.distance,
   headless: params.headless,
   skipTopdown: params.skipTopdown,
+  hideDebug: params.hideDebug,
 });

@@ -65,6 +65,11 @@ export class DebugDraw {
     return this.visible;
   }
 
+  /** The look-ahead marker. Hidden in the level camera, which has no aim point. */
+  setAimVisible(on: boolean): void {
+    this.aimSphere.visible = on;
+  }
+
   /**
    * Update the centre line so it traces the road's centre column at the
    * supplied per-row X offsets. Pass the same offsets the terrain mesh

@@ -22,25 +22,15 @@ export const DEFAULT_SCENE_FOG: SceneFogParams = MODE7_DEFAULTS.fog;
 export function createScene(): SceneRig {
   const scene = new THREE.Scene();
 
-  const ambient = new THREE.AmbientLight(0x6a7aa8, 0.6);
+  // High ambient, modest warm sun from the upper right — the same direction
+  // painted into the unlit sprites, so the terrain form-shades without
+  // fighting the illustration.
+  const ambient = new THREE.AmbientLight(0xd7dee6, 0.9);
   scene.add(ambient);
 
-  const sun = new THREE.DirectionalLight(0xfff5d6, 1.1);
-  sun.position.set(4, 8, 6);
-  // The player is pinned to the world origin (the road moves underneath),
-  // so the shadow camera can be statically centred on (0, 0, 0) — no
-  // per-frame frustum updates. A 10 m × 10 m × 19 m box around the light's
-  // view of the origin comfortably contains the 1 m sphere caster.
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -5;
-  sun.shadow.camera.right = 5;
-  sun.shadow.camera.top = 5;
-  sun.shadow.camera.bottom = -5;
-  sun.shadow.camera.near = 1;
-  sun.shadow.camera.far = 20;
-  sun.shadow.bias = -0.0005;
-  sun.shadow.camera.updateProjectionMatrix();
+  const sun = new THREE.DirectionalLight(0xfff1d6, 0.58);
+  sun.position.set(28, 42, 18);
+  sun.castShadow = false;
   scene.add(sun);
 
   return { scene, ambient, sun };

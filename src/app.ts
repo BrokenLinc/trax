@@ -7,12 +7,15 @@ import { ChaseCamera, diagnosticChaseVersusThreeLookAtDeg } from './render/camer
 import { createScene, SceneFog } from './render/scene.ts';
 import { TerrainMesh, type TerrainSnapshot } from './render/terrainMesh.ts';
 import { PlayerMesh } from './render/playerMesh.ts';
+import { SkyRig } from './render/skyRig.ts';
+import { SpriteLayer } from './render/spriteLayer.ts';
 import { WaterPlane } from './render/waterPlane.ts';
 import { DebugDraw } from './render/debugDraw.ts';
 import { meshLateralBounds, signedColFromWorldX } from './render/meshLattice.ts';
 import { PlayerController } from './player/controller.ts';
 import { createPlayerState, type PlayerState } from './player/state.ts';
 import { Hud } from './debug/hud.ts';
+import { KeyOverlay } from './debug/keyOverlay.ts';
 import { buildGui } from './debug/gui.ts';
 import { TopDownView } from './debug/topdownView.ts';
 import {
@@ -39,6 +42,8 @@ export interface AppOptions {
   headless: boolean;
   /** When true, skips the inset top-down `renderer.render` (URL `noTopdown=1`). */
   skipTopdown?: boolean;
+  /** When true, hides axes, centre line, and the aim marker (URL `noDebug=1`). */
+  hideDebug?: boolean;
 }
 
 /**
@@ -55,11 +60,14 @@ export class App {
   private readonly sceneFog: SceneFog;
   private readonly terrain: TerrainMesh;
   private readonly playerMesh: PlayerMesh;
+  private readonly sprites: SpriteLayer;
+  private readonly sky: SkyRig;
   private readonly water: WaterPlane;
   private readonly debugDraw: DebugDraw;
   private readonly controller: PlayerController;
   private readonly player: PlayerState;
   private readonly hud: Hud | null;
+  private readonly keys: KeyOverlay | null;
   private readonly gui: GUI | null;
   private readonly topdown: TopDownView;
   private readonly world: World;
@@ -72,6 +80,7 @@ export class App {
   private fpsAccum = 0;
   private fpsFrames = 0;
   private paused = false;
+  private devOverlays = true;
   private headless: boolean;
   /** Filled inside `render()` from `gl.VIEWPORT` after each pass boundary. */
   private glVpAfterMain: [number, number, number, number] | null = null;
@@ -88,12 +97,8 @@ export class App {
       antialias: true,
       preserveDrawingBuffer: opts.headless,
     });
-    this.renderer.shadowMap.enabled = true;
-    // Default PCFShadowMap is used. PCFSoftShadowMap is deprecated in
-    // three ≥ 0.184 (the renderer silently downgrades), and VSMShadowMap
-    // would force every shadow receiver to also cast — that would produce
-    // noisy self-shadowing on the flat-shaded terrain.
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    // Sprites are unlit cards. The rider's contact is a blob, not a shadow map.
+    this.renderer.shadowMap.enabled = false;
     this.container.appendChild(this.renderer.domElement);
 
     const rig = createScene();
@@ -107,10 +112,15 @@ export class App {
     this.terrain = new TerrainMesh(this.world);
     this.scene.add(this.terrain.mesh);
 
+    this.sprites = new SpriteLayer(this.terrain.mesh, this.world, this.terrain);
+    this.sky = new SkyRig();
+    this.scene.add(this.sky.group);
+
     this.playerMesh = new PlayerMesh();
     this.scene.add(this.playerMesh.mesh);
 
     this.debugDraw = new DebugDraw(this.terrain.getRowCount());
+    if (opts.hideDebug) this.debugDraw.setVisible(false);
     this.scene.add(this.debugDraw.group);
     this.terrain.setRowCountSink((n) => this.debugDraw.setRowCount(n));
 
@@ -122,6 +132,16 @@ export class App {
     this.controller.headless = opts.headless;
 
     this.hud = opts.headless ? null : new Hud(this.container);
+    this.keys = opts.headless
+      ? null
+      : new KeyOverlay(this.container, {
+          onWireframe: () => this.toggleWireframe(),
+          onTopdown: () => this.toggleTopdown(),
+          onDevOverlays: () => this.setDevOverlays(!this.devOverlays),
+          onReseed: () => this.reseed(),
+          onPause: () => this.setPaused(!this.paused),
+          onCamera: () => this.toggleCameraMode(),
+        });
     // Always create the top-down: it's useful in headless screenshots too.
     // Pass a parent only when we actually have a visible DOM container.
     this.topdown = new TopDownView(opts.headless ? null : this.container);
@@ -167,6 +187,7 @@ export class App {
       const dt = Math.min(0.1, (t - this.lastTimeMs) / 1000);
       this.lastTimeMs = t;
       if (!this.paused) this.simulate(dt);
+      else this.refreshOverlays();
       this.render();
       this.updateFps(dt);
       this.rafHandle = requestAnimationFrame(frame);
@@ -190,9 +211,12 @@ export class App {
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.hud?.destroy();
+    this.keys?.destroy();
     this.gui?.destroy();
     this.topdown.destroy();
     this.playerMesh.dispose();
+    this.sprites.dispose();
+    this.sky.dispose();
     this.water.dispose();
     this.terrain.dispose();
     this.renderer.dispose();
@@ -445,12 +469,15 @@ export class App {
     );
     this.player.y = this.world.depth.sampleBilinear(this.player.distance, depthCol);
     this.terrain.update(this.player.distance, this.player.lateralX);
+    this.sprites.update(this.player.distance);
     this.playerMesh.update(
       this.player.distance,
       this.world,
       this.player.lateralX,
       tp.roadColSpacing,
       tp.landscapeColSpacing,
+      this.player.speed,
+      this.player.lateralSpeed,
     );
     this.debugDraw.updateCentreLine(
       this.terrain.snapshot().offsets,
@@ -466,7 +493,14 @@ export class App {
       this.terrain.getParams().rowSpacing,
     );
     this.camera.update(this.chaseRigContext());
+    this.debugDraw.setAimVisible(this.camera.getMode() === 'aim');
+    this.sky.update(this.camera.camera.position.y);
     this.topdown.update(this.player.y);
+    this.refreshOverlays();
+  }
+
+  /** HUD and keycaps. Runs while paused so a held key still reads as pressed. */
+  private refreshOverlays(): void {
     if (this.hud) {
       const lo = Math.floor(this.player.distance);
       this.hud.update({
@@ -483,6 +517,13 @@ export class App {
         headless: this.headless,
       });
     }
+    this.keys?.update({
+      wireframe: this.terrain.isWireframe(),
+      topdown: this.topdown.isVisible(),
+      devOverlays: this.devOverlays,
+      paused: this.paused,
+      cameraLevel: this.camera.getMode() === 'level',
+    });
   }
 
   private render(): void {
@@ -565,19 +606,57 @@ export class App {
   };
 
   private readonly handleHotkey = (e: KeyboardEvent): void => {
+    if (e.repeat) return;
+    const target = e.target;
+    if (target instanceof HTMLElement) {
+      const tag = target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) {
+        return;
+      }
+      if (e.code === 'Space' && target.closest('.mode7-keys')) e.preventDefault();
+    }
     if (e.code === 'Space') {
-      this.paused = !this.paused;
+      this.setPaused(!this.paused);
     } else if (e.code === 'KeyR') {
-      this.world.reseed(`${this.world.getSeed()}+${Math.floor(Math.random() * 1e6)}`);
-      this.terrain.setWorld(this.world);
+      this.reseed();
     } else if (e.code === 'KeyG') {
-      this.terrain.setWireframe(!this.terrain.isWireframe());
+      this.toggleWireframe();
     } else if (e.code === 'KeyV') {
-      this.topdown.setVisible(!this.topdown.isVisible());
+      this.toggleTopdown();
     } else if (e.code === 'KeyU') {
       this.topdown.setWorldSpaceMode(!this.topdown.isWorldSpaceMode());
+    } else if (e.code === 'KeyC') {
+      this.toggleCameraMode();
+    } else if (e.code === 'Backquote') {
+      this.setDevOverlays(!this.devOverlays);
     }
   };
+
+  private toggleWireframe(): void {
+    this.terrain.setWireframe(!this.terrain.isWireframe());
+  }
+
+  private toggleTopdown(): void {
+    this.topdown.setVisible(!this.topdown.isVisible());
+  }
+
+  private toggleCameraMode(): void {
+    this.camera.toggleMode();
+  }
+
+  private reseed(): void {
+    this.world.reseed(`${this.world.getSeed()}+${Math.floor(Math.random() * 1e6)}`);
+    this.terrain.setWorld(this.world);
+  }
+
+  /** Raw HUD and the lil-gui panel. The key strip stays up. */
+  private setDevOverlays(on: boolean): void {
+    this.devOverlays = on;
+    this.hud?.setVisible(on);
+    if (!this.gui) return;
+    if (on) this.gui.show();
+    else this.gui.hide();
+  }
 }
 
 function readGlViewport(

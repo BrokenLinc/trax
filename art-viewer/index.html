@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Art history</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #12110f;
+        --fg: #ebe6dc;
+        --muted: #a39c90;
+        --line: #2c2a26;
+        --panel: #1c1b18;
+        --accent: #d7c4a3;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          15px/1.45 'Iowan Old Style',
+          Palatino,
+          'Palatino Linotype',
+          Georgia,
+          serif;
+      }
+
+      .page {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 32px 24px 80px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 28px;
+        font-weight: 500;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 500;
+      }
+
+      #status,
+      .empty {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .round {
+        padding: 28px 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .round:first-child {
+        border-top: 0;
+      }
+
+      .meta {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 4px 16px;
+        max-width: 78ch;
+        margin: 12px 0 0;
+      }
+
+      .meta div {
+        display: contents;
+      }
+
+      .meta dt {
+        color: var(--muted);
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .meta dd,
+      .summary {
+        margin: 0;
+        white-space: pre-wrap;
+      }
+
+      .summary {
+        max-width: 78ch;
+        margin-top: 12px;
+        color: var(--muted);
+      }
+
+      .strip {
+        display: flex;
+        gap: 12px;
+        overflow-x: auto;
+        margin-top: 16px;
+        padding-bottom: 8px;
+      }
+
+      .strip button {
+        flex: 0 0 auto;
+        padding: 0;
+        border: 0;
+        background: #000;
+        cursor: zoom-in;
+      }
+
+      .strip img {
+        display: block;
+        width: auto;
+        height: 220px;
+        background: #000;
+      }
+
+      .strip button:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      #tooltip {
+        position: fixed;
+        z-index: 5;
+        max-width: 380px;
+        max-height: 50vh;
+        overflow: auto;
+        padding: 12px 14px;
+        pointer-events: none;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+      }
+
+      #tooltip .prose,
+      #lightbox .prose {
+        margin: 0;
+        white-space: pre-wrap;
+      }
+
+      #tooltip .scores,
+      #lightbox .scores {
+        margin: 8px 0 0;
+        color: var(--accent);
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      #lightbox {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: flex;
+        gap: 28px;
+        align-items: center;
+        justify-content: center;
+        padding: 32px;
+        background: rgba(0, 0, 0, 0.82);
+      }
+
+      #lightbox img {
+        max-width: min(70vw, 1100px);
+        max-height: 86vh;
+        object-fit: contain;
+        cursor: zoom-out;
+        background: #000;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+      }
+
+      .lightbox-copy {
+        width: min(360px, 32vw);
+        max-height: 86vh;
+        overflow: auto;
+      }
+
+      @media (max-width: 800px) {
+        #lightbox {
+          flex-direction: column;
+        }
+
+        #lightbox img {
+          max-width: 100%;
+        }
+
+        .lightbox-copy {
+          width: min(100%, 560px);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="top">
+        <h1>Art history</h1>
+        <p id="status" aria-live="polite">Loading…</p>
+      </header>
+      <main id="rounds"></main>
+    </div>
+    <div id="tooltip" hidden>
+      <p class="prose"></p>
+      <p class="scores"></p>
+    </div>
+    <div id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Snapshot">
+      <img alt="" />
+      <div class="lightbox-copy">
+        <p class="prose"></p>
+        <p class="scores"></p>
+      </div>
+    </div>
+    <script>
+      const main = document.querySelector('#rounds');
+      const status = document.querySelector('#status');
+      const tooltip = document.querySelector('#tooltip');
+      const lightbox = document.querySelector('#lightbox');
+      const tipProse = tooltip?.querySelector('.prose');
+      const tipScores = tooltip?.querySelector('.scores');
+      const lightImg = lightbox?.querySelector('img');
+      const lightProse = lightbox?.querySelector('.prose');
+      const lightScores = lightbox?.querySelector('.scores');
+
+      const fields = [
+        ['when', 'When'],
+        ['seed', 'Seed'],
+        ['distances', 'Distances'],
+        ['frame', 'Frame'],
+        ['target', 'Target'],
+      ];
+
+      let catalog = { rounds: [] };
+      let loadGen = 0;
+      let hover = null;
+      let open = null;
+
+      function findImage(folder, file) {
+        const round = catalog.rounds.find((item) => item.folder === folder);
+        if (!round) return null;
+        return round.images.find((image) => image.file === file) ?? null;
+      }
+
+      function fillCopy(proseEl, scoresEl, image) {
+        const prose = image.prose.trim();
+        const scores = image.scores.trim();
+        const empty = prose === '' && scores === '';
+        proseEl.hidden = !empty && prose === '';
+        proseEl.textContent = empty ? 'No description yet.' : image.prose;
+        scoresEl.hidden = scores === '';
+        scoresEl.textContent = image.scores;
+      }
+
+      function buttonKey(button) {
+        const section = button.closest('.round');
+        const folder = section?.dataset.folder;
+        const file = button.dataset.file;
+        if (!folder || !file) return null;
+        return { folder, file };
+      }
+
+      function syncImages(strip, round) {
+        round.images.forEach((image, index) => {
+          let button = [...strip.children].find((child) => child.dataset.file === image.file);
+          if (!button) {
+            button = document.createElement('button');
+            button.type = 'button';
+            button.dataset.file = image.file;
+            const img = document.createElement('img');
+            img.alt = image.file;
+            img.draggable = false;
+            button.append(img);
+          }
+          button.setAttribute('aria-label', image.file);
+          const img = button.querySelector('img');
+          if (img && img.getAttribute('src') !== image.src) img.src = image.src;
+          const current = strip.children[index];
+          if (current !== button) strip.insertBefore(button, current ?? null);
+        });
+        while (strip.children.length > round.images.length) strip.lastElementChild?.remove();
+      }
+
+      function ensureRound(round) {
+        let section = [...main.children].find((child) => child.dataset.folder === round.folder);
+        if (!section) {
+          section = document.createElement('section');
+          section.className = 'round';
+          section.dataset.folder = round.folder;
+          const heading = document.createElement('h2');
+          const meta = document.createElement('dl');
+          meta.className = 'meta';
+          const summary = document.createElement('p');
+          summary.className = 'summary';
+          const strip = document.createElement('div');
+          strip.className = 'strip';
+          section.append(heading, meta, summary, strip);
+        }
+        const heading = section.querySelector('h2');
+        if (heading) heading.textContent = round.title;
+        const meta = section.querySelector('.meta');
+        if (meta) {
+          meta.replaceChildren();
+          for (const [key, label] of fields) {
+            const value = round[key];
+            if (!value) continue;
+            const row = document.createElement('div');
+            const dt = document.createElement('dt');
+            dt.textContent = label;
+            const dd = document.createElement('dd');
+            dd.textContent = value;
+            row.append(dt, dd);
+            meta.append(row);
+          }
+        }
+        const summary = section.querySelector('.summary');
+        if (summary) {
+          summary.textContent = round.summary;
+          summary.hidden = round.summary.trim() === '';
+        }
+        const strip = section.querySelector('.strip');
+        if (strip) syncImages(strip, round);
+        return section;
+      }
+
+      function render() {
+        const rounds = Array.isArray(catalog.rounds) ? catalog.rounds : [];
+        if (rounds.length === 0) {
+          main.replaceChildren();
+          const empty = document.createElement('p');
+          empty.className = 'empty';
+          empty.textContent = 'No rounds in art-history yet.';
+          main.append(empty);
+          refreshHoverCopy();
+          applyLightbox();
+          return;
+        }
+        rounds.forEach((round, index) => {
+          const section = ensureRound(round);
+          const current = main.children[index];
+          if (current !== section) main.insertBefore(section, current ?? null);
+        });
+        while (main.children.length > rounds.length) main.lastElementChild?.remove();
+        refreshHoverCopy();
+        applyLightbox();
+      }
+
+      function moveTooltip(x, y) {
+        const pad = 14;
+        tooltip.hidden = false;
+        tooltip.style.left = `${x + pad}px`;
+        tooltip.style.top = `${y + pad}px`;
+        const rect = tooltip.getBoundingClientRect();
+        let left = x + pad;
+        let top = y + pad;
+        if (left + rect.width > window.innerWidth - 8) left = Math.max(8, x - rect.width - pad);
+        if (top + rect.height > window.innerHeight - 8) top = Math.max(8, y - rect.height - pad);
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+      }
+
+      function showTooltip(button, event) {
+        if (open) return;
+        const key = buttonKey(button);
+        if (!key) return;
+        const image = findImage(key.folder, key.file);
+        if (!image || !tipProse || !tipScores) return;
+        hover = key;
+        fillCopy(tipProse, tipScores, image);
+        moveTooltip(event.clientX, event.clientY);
+      }
+
+      function hideTooltip() {
+        hover = null;
+        tooltip.hidden = true;
+      }
+
+      function refreshHoverCopy() {
+        if (!hover || !tipProse || !tipScores) return;
+        const image = findImage(hover.folder, hover.file);
+        if (!image) {
+          hideTooltip();
+          return;
+        }
+        fillCopy(tipProse, tipScores, image);
+      }
+
+      function applyLightbox() {
+        if (!open) {
+          lightbox.hidden = true;
+          return;
+        }
+        const image = findImage(open.folder, open.file);
+        if (!image || !lightImg || !lightProse || !lightScores) {
+          open = null;
+          lightbox.hidden = true;
+          return;
+        }
+        lightbox.hidden = false;
+        if (lightImg.getAttribute('src') !== image.src) lightImg.src = image.src;
+        lightImg.alt = image.file;
+        fillCopy(lightProse, lightScores, image);
+      }
+
+      function closeLightbox() {
+        open = null;
+        lightbox.hidden = true;
+      }
+
+      main.addEventListener('mousemove', (event) => {
+        const button = event.target instanceof Element ? event.target.closest('button') : null;
+        if (!button || !main.contains(button)) return;
+        showTooltip(button, event);
+      });
+
+      main.addEventListener('mouseout', (event) => {
+        const button = event.target instanceof Element ? event.target.closest('button') : null;
+        if (!button) return;
+        if (event.relatedTarget instanceof Node && button.contains(event.relatedTarget)) return;
+        hideTooltip();
+      });
+
+      main.addEventListener('click', (event) => {
+        const button = event.target instanceof Element ? event.target.closest('button') : null;
+        if (!button || !main.contains(button)) return;
+        const key = buttonKey(button);
+        if (!key) return;
+        hideTooltip();
+        open = key;
+        applyLightbox();
+      });
+
+      lightbox.addEventListener('click', (event) => {
+        if (event.target === lightbox || event.target === lightImg) closeLightbox();
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && open) closeLightbox();
+      });
+
+      async function load() {
+        const gen = ++loadGen;
+        try {
+          const res = await fetch('/api/history', { cache: 'no-store' });
+          if (!res.ok) throw new Error(String(res.status));
+          const next = await res.json();
+          if (gen !== loadGen) return;
+          catalog = next && Array.isArray(next.rounds) ? next : { rounds: [] };
+          render();
+          status.textContent = 'Live';
+        } catch {
+          if (gen !== loadGen) return;
+          status.textContent = 'Catalog unavailable';
+        }
+      }
+
+      const events = new EventSource('/events');
+      events.addEventListener('update', () => {
+        void load();
+      });
+      events.onerror = () => {
+        status.textContent = 'Reconnecting…';
+      };
+      events.onopen = () => {
+        void load();
+      };
+
+      if (main && status && tooltip && lightbox) void load();
+    </script>
+  </body>
+</html>
