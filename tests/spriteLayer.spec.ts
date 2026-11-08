@@ -26,7 +26,18 @@ describe('SpriteLayer', () => {
         rowsBehind: 4,
       }),
     };
-    const kinds: SceneryKind[] = ['broadleaf', 'pine', 'shrub', 'post', 'rock'];
+    const kinds: SceneryKind[] = [
+      'broadleaf',
+      'pine',
+      'cedar',
+      'maple',
+      'birch',
+      'shrub',
+      'bloom',
+      'flowers',
+      'post',
+      'rock',
+    ];
     const textures = Object.fromEntries(
       kinds.map((kind) => [kind, fakeTexture(80, 160)]),
     ) as Record<SceneryKind, THREE.Texture>;

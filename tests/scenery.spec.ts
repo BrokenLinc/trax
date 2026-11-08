@@ -5,15 +5,17 @@ import {
   TREE_MIN_M,
   VALLEY_DROP_M,
   flatHeight,
+  isTreeKind,
   sceneryForRow,
   sceneryInRange,
   type SceneryHeight,
+  type SceneryKind,
 } from '../src/world/scenery.ts';
 
 const flat = flatHeight(0);
 
 function isTree(kind: string): boolean {
-  return kind === 'pine' || kind === 'broadleaf';
+  return isTreeKind(kind as SceneryKind);
 }
 
 describe('sceneryForRow', () => {
@@ -62,6 +64,56 @@ describe('sceneryForRow', () => {
     for (const tree of trees) {
       expect(Math.abs(tree.localX)).toBeGreaterThanOrEqual(TREE_MIN_M);
     }
+  });
+
+  it('keeps conifer and maple groves together', () => {
+    const rows = 180;
+    const runs = (match: (kind: SceneryKind) => boolean): number[] => {
+      const lengths: number[] = [];
+      let run = 0;
+      for (let row = 0; row < rows; row++) {
+        const hit = sceneryForRow('mode7', row, flat).some(
+          (inst) => inst.localX > 0 && match(inst.kind),
+        );
+        if (hit) run += 1;
+        else if (run > 0) {
+          lengths.push(run);
+          run = 0;
+        }
+      }
+      if (run > 0) lengths.push(run);
+      return lengths;
+    };
+    const mean = (lengths: number[]): number =>
+      lengths.reduce((sum, n) => sum + n, 0) / lengths.length;
+    const conifer = runs((kind) => kind === 'pine' || kind === 'broadleaf' || kind === 'cedar');
+    const maple = runs((kind) => kind === 'maple');
+    expect(conifer.length).toBeGreaterThan(0);
+    expect(Math.max(...conifer)).toBeGreaterThan(2);
+    expect(mean(conifer)).toBeGreaterThan(1.5);
+    expect(maple.length).toBeGreaterThan(0);
+    expect(Math.max(...maple)).toBeGreaterThan(2);
+
+    let same = 0;
+    let changed = 0;
+    let prev: number | null = null;
+    for (let row = 0; row < rows; row++) {
+      const tree = sceneryForRow('mode7', row, flat).find(
+        (inst) =>
+          inst.localX > 0 &&
+          (inst.kind === 'pine' || inst.kind === 'broadleaf' || inst.kind === 'cedar'),
+      );
+      if (!tree) {
+        prev = null;
+        continue;
+      }
+      if (prev !== null) {
+        if (tree.hue === prev) same += 1;
+        else changed += 1;
+      }
+      prev = tree.hue;
+    }
+    expect(same).toBeGreaterThan(changed);
   });
 
   it('changes with the seed', () => {

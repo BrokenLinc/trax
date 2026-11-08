@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 import type { World } from '../world/world.ts';
 import {
+  HUE_STOPS,
   sceneryInRange,
   type SceneryHeight,
   type SceneryInstance,
@@ -13,7 +14,12 @@ import { loadColorTexture } from './loadTexture.ts';
 const SPRITE_URL: Record<SceneryKind, string> = {
   broadleaf: '/sprites/tree-broadleaf.png',
   pine: '/sprites/tree-pine.png',
+  cedar: '/sprites/tree-cedar.png',
+  maple: '/sprites/tree-maple.png',
+  birch: '/sprites/tree-birch.png',
   shrub: '/sprites/shrub.png',
+  bloom: '/sprites/shrub-flower.png',
+  flowers: '/sprites/flowers.png',
   post: '/sprites/post.png',
   rock: '/sprites/rock.png',
 };
@@ -22,7 +28,12 @@ const SPRITE_URL: Record<SceneryKind, string> = {
 const FALLBACK_ASPECT: Record<SceneryKind, number> = {
   broadleaf: 0.85,
   pine: 0.62,
+  cedar: 0.44,
+  maple: 0.63,
+  birch: 0.38,
   shrub: 1.15,
+  bloom: 1.2,
+  flowers: 1.54,
   post: 0.28,
   rock: 1.15,
 };
@@ -30,15 +41,36 @@ const FALLBACK_ASPECT: Record<SceneryKind, number> = {
 /** Past the fog the cards are a full-fog fill cost, so the window stops here. */
 const SCENERY_ROWS_AHEAD = 120;
 const SCENERY_ROWS_BEHIND = 18;
-const CARD_CAP = 420;
+const CARD_CAP = 700;
 
 const SINK: Record<SceneryKind, number> = {
   broadleaf: 1.1,
   pine: 0.85,
+  cedar: 0.9,
+  maple: 1.05,
+  birch: 0.7,
   shrub: 0.15,
+  bloom: 0.12,
+  flowers: 0.06,
   post: 0.04,
   rock: 0.08,
 };
+
+/** Degrees of hue rotation per stop. Lengths match `HUE_STOPS`. */
+const HUE_DEGREES: Record<SceneryKind, readonly number[]> = {
+  broadleaf: [-10, 0, 12],
+  pine: [-12, 0, 14],
+  cedar: [-8, 0, 16],
+  maple: [0, -28, -62, -105],
+  birch: [-6, 0, 8],
+  shrub: [-18, 0, 16],
+  bloom: [-8, 0, 8],
+  flowers: [-6, 0, 6],
+  post: [0],
+  rock: [0],
+};
+
+const KINDS = Object.keys(SPRITE_URL) as SceneryKind[];
 
 export interface SpriteAnchor {
   worldXAtRow(row: number): number | null;
@@ -66,12 +98,14 @@ function configureCutout(tex: THREE.Texture): void {
   if (tex.image) tex.needsUpdate = true;
 }
 
-/** Near-white shifts so a repeated cutout does not read as one stamp. */
-const TINTS = [0xffffff, 0xf4efe6, 0xd7e4d8, 0xe8d8c4] as const;
+let placeholder: THREE.DataTexture | undefined;
 
-function tintIndex(row: number, localX: number): number {
-  const n = row * 17 + Math.round(localX * 3);
-  return ((n % TINTS.length) + TINTS.length) % TINTS.length;
+function fallbackWhite(): THREE.Texture {
+  if (placeholder) return placeholder;
+  placeholder = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+  placeholder.needsUpdate = true;
+  configureCutout(placeholder);
+  return placeholder;
 }
 
 function cutoutMaterial(map: THREE.Texture, tint: number): THREE.MeshLambertMaterial {
@@ -83,6 +117,31 @@ function cutoutMaterial(map: THREE.Texture, tint: number): THREE.MeshLambertMate
     depthWrite: true,
     color: tint,
   });
+}
+
+function isDrawable(image: unknown): image is CanvasImageSource {
+  if (typeof HTMLImageElement !== 'undefined' && image instanceof HTMLImageElement) return true;
+  if (typeof HTMLCanvasElement !== 'undefined' && image instanceof HTMLCanvasElement) return true;
+  if (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap) return true;
+  if (typeof OffscreenCanvas !== 'undefined' && image instanceof OffscreenCanvas) return true;
+  return false;
+}
+
+/** One rotated copy. Returns the source when the image is not drawable yet. */
+function bakeHue(source: THREE.Texture, degrees: number): THREE.Texture {
+  const image = source.image as { width?: number; height?: number } | undefined;
+  if (!image?.width || !image.height || !isDrawable(source.image)) return source;
+  const canvas = document.createElement('canvas');
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return source;
+  ctx.imageSmoothingEnabled = false;
+  ctx.filter = `hue-rotate(${degrees}deg)`;
+  ctx.drawImage(source.image, 0, 0);
+  const tex = new THREE.CanvasTexture(canvas);
+  configureCutout(tex);
+  return tex;
 }
 
 function imageAspect(tex: THREE.Texture, fallback: number): number {
@@ -103,6 +162,7 @@ export class SpriteLayer {
   private readonly variants: Record<SceneryKind, THREE.MeshLambertMaterial[]>;
   private readonly authoredTint = new WeakMap<THREE.MeshLambertMaterial, number>();
   private readonly textures: Record<SceneryKind, THREE.Texture>;
+  private readonly hueTextures: THREE.Texture[] = [];
   private readonly pool: THREE.Mesh[] = [];
   private live: LiveSprite[] = [];
   private builtSeed = '';
@@ -122,17 +182,33 @@ export class SpriteLayer {
     this.group.frustumCulled = false;
     parent.add(this.group);
 
-    const kinds: SceneryKind[] = ['broadleaf', 'pine', 'shrub', 'post', 'rock'];
     const maps = {} as Record<SceneryKind, THREE.Texture>;
     const variants = {} as Record<SceneryKind, THREE.MeshLambertMaterial[]>;
-    for (const kind of kinds) {
-      const tex = textures?.[kind] ?? loadColorTexture(SPRITE_URL[kind], configureCutout);
-      maps[kind] = tex;
-      variants[kind] = TINTS.map((tint) => {
-        const mat = cutoutMaterial(tex, tint);
-        this.authoredTint.set(mat, tint);
+    for (const kind of KINDS) {
+      const degrees = HUE_DEGREES[kind];
+      if (degrees.length !== HUE_STOPS[kind]) {
+        throw new Error(`hue stops for ${kind} do not match`);
+      }
+      const mats = degrees.map(() => {
+        const mat = cutoutMaterial(fallbackWhite(), 0xffffff);
+        this.authoredTint.set(mat, 0xffffff);
         return mat;
       });
+      const apply = (loaded: THREE.Texture): void => {
+        configureCutout(loaded);
+        degrees.forEach((deg, i) => {
+          const mat = mats[i];
+          if (!mat) return;
+          const map = this.hueMap(loaded, deg);
+          mat.map = map;
+          mat.needsUpdate = true;
+        });
+      };
+      const provided = textures?.[kind];
+      const tex = provided ?? loadColorTexture(SPRITE_URL[kind], apply);
+      if (provided) apply(provided);
+      maps[kind] = tex;
+      variants[kind] = mats;
     }
     this.textures = maps;
     this.variants = variants;
@@ -200,6 +276,7 @@ export class SpriteLayer {
     if (this.ownsTextures) {
       for (const tex of Object.values(this.textures)) tex.dispose();
     }
+    for (const tex of this.hueTextures) tex.dispose();
     this.group.removeFromParent();
   }
 
@@ -216,8 +293,9 @@ export class SpriteLayer {
     this.live = instances.map((inst, i) => {
       const mesh = this.pool[i];
       if (!mesh) throw new Error('sprite pool underflow');
-      const tinted =
-        this.variants[inst.kind][tintIndex(inst.row, inst.localX)] ?? this.variants[inst.kind][0];
+      const stops = this.variants[inst.kind];
+      const hue = ((inst.hue % stops.length) + stops.length) % stops.length;
+      const tinted = stops[hue] ?? stops[0];
       if (!tinted) throw new Error('sprite materials missing');
       mesh.material = tinted;
       mesh.visible = true;
@@ -251,6 +329,14 @@ export class SpriteLayer {
       mesh.rotation.set(0, 0, 0);
       mesh.quaternion.identity();
     }
+  }
+
+  /** A hue-rotated copy of a loaded card. Degree 0 keeps the source map. */
+  private hueMap(source: THREE.Texture, degrees: number): THREE.Texture {
+    if (degrees === 0) return source;
+    const baked = bakeHue(source, degrees);
+    if (baked !== source) this.hueTextures.push(baked);
+    return baked;
   }
 }
 
