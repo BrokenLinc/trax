@@ -52,7 +52,7 @@ export class ChunkStreamer {
   private readonly chunks = new Map<number, LoadedChunk>();
   private bakeSource: ChunkBakeSource;
   private wireframe = false;
-  private readonly grassMaterial: THREE.MeshBasicMaterial;
+  private readonly grassMaterial: THREE.MeshLambertMaterial;
 
   constructor(
     private world: World,

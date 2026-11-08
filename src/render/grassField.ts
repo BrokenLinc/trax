@@ -63,8 +63,8 @@ function plot(data: Uint8Array, x: number, y: number, rgb: [number, number, numb
   data[i + 3] = 255;
 }
 
-export function createGrassMaterial(map: THREE.Texture): THREE.MeshBasicMaterial {
-  return new THREE.MeshBasicMaterial({
+export function createGrassMaterial(map: THREE.Texture): THREE.MeshLambertMaterial {
+  return new THREE.MeshLambertMaterial({
     map,
     alphaTest: 0.5,
     side: THREE.DoubleSide,

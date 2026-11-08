@@ -75,7 +75,7 @@ function tintIndex(row: number, localX: number): number {
 }
 
 function cutoutMaterial(map: THREE.Texture, tint: number): THREE.MeshBasicMaterial {
-  return new THREE.MeshBasicMaterial({
+  const mat = new THREE.MeshBasicMaterial({
     map,
     alphaTest: 0.58,
     side: THREE.DoubleSide,
@@ -83,6 +83,7 @@ function cutoutMaterial(map: THREE.Texture, tint: number): THREE.MeshBasicMateri
     depthWrite: true,
     color: tint,
   });
+  return mat;
 }
 
 function imageAspect(tex: THREE.Texture, fallback: number): number {
@@ -101,6 +102,7 @@ export class SpriteLayer {
   readonly group = new THREE.Group();
   private world: World;
   private readonly variants: Record<SceneryKind, THREE.MeshBasicMaterial[]>;
+  private readonly authoredTint = new WeakMap<THREE.MeshBasicMaterial, number>();
   private readonly textures: Record<SceneryKind, THREE.Texture>;
   private readonly pool: THREE.Mesh[] = [];
   private live: LiveSprite[] = [];
@@ -127,7 +129,11 @@ export class SpriteLayer {
     for (const kind of kinds) {
       const tex = textures?.[kind] ?? loadColorTexture(SPRITE_URL[kind], configureCutout);
       maps[kind] = tex;
-      variants[kind] = TINTS.map((tint) => cutoutMaterial(tex, tint));
+      variants[kind] = TINTS.map((tint) => {
+        const mat = cutoutMaterial(tex, tint);
+        this.authoredTint.set(mat, tint);
+        return mat;
+      });
     }
     this.textures = maps;
     this.variants = variants;
@@ -140,6 +146,18 @@ export class SpriteLayer {
   setWorld(world: World): void {
     this.world = world;
     this.builtSeed = '';
+  }
+
+  /** Multiply each card's authored tint. White at noon, dim at night. */
+  setAlbedo(r: number, g: number, b: number): void {
+    const scale = new THREE.Color(r, g, b);
+    for (const list of Object.values(this.variants)) {
+      for (const mat of list) {
+        const tint = this.authoredTint.get(mat);
+        if (tint === undefined) continue;
+        mat.color.setHex(tint).multiply(scale);
+      }
+    }
   }
 
   /**

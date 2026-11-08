@@ -26,6 +26,8 @@ export function buildGui(opts: {
   debugDraw: DebugDraw;
   topdown: TopDownView;
   sky: SkyRig;
+  dayClock: { timeOfDay: number; dayLength: number };
+  onTimeOfDay: () => void;
   onWireframeChange: (on: boolean) => void;
   onDebugVisible: (on: boolean) => void;
   onTopdownVisible: (on: boolean) => void;
@@ -133,6 +135,13 @@ export function buildGui(opts: {
   bend.add(bp, 'amplitude', 0, 10, 0.01).onChange(() => opts.world.bend.setParams(bp));
   bend.add(bp, 'detailWeight', 0, 0.5, 0.01).onChange(() => opts.world.bend.setParams(bp));
   bend.add(bp, 'detailFrequency', 0.005, 0.3, 0.005).onChange(() => opts.world.bend.setParams(bp));
+
+  const day = gui.addFolder('day');
+  day
+    .add(opts.dayClock, 'timeOfDay', 0, 1, 0.001)
+    .name('time of day')
+    .onChange(() => opts.onTimeOfDay());
+  day.add(opts.dayClock, 'dayLength', 30, 900, 1).name('day length (s)');
 
   const chase = gui.addFolder('chase camera');
   const cp = opts.chaseCamera.getParams();

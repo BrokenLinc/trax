@@ -7,6 +7,8 @@ export interface SceneRig {
   scene: THREE.Scene;
   ambient: THREE.AmbientLight;
   sun: THREE.DirectionalLight;
+  /** Dim fill from the opposite arc. Intensity stays 0 until the moon is up. */
+  moon: THREE.DirectionalLight;
 }
 
 export interface SceneFogParams {
@@ -33,7 +35,12 @@ export function createScene(): SceneRig {
   sun.castShadow = false;
   scene.add(sun);
 
-  return { scene, ambient, sun };
+  const moon = new THREE.DirectionalLight(0xb8c8f0, 0);
+  moon.position.set(0, 30, -8);
+  moon.castShadow = false;
+  scene.add(moon);
+
+  return { scene, ambient, sun, moon };
 }
 
 /**
@@ -58,6 +65,12 @@ export class SceneFog {
 
   setParams(params: SceneFogParams): void {
     this.params = params;
+    this.apply();
+  }
+
+  /** The day cycle owns the haze colour. Near and far stay put. */
+  setColor(color: number): void {
+    this.params.color = color;
     this.apply();
   }
 

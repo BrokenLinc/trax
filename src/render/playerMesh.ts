@@ -119,6 +119,12 @@ export class PlayerMesh {
     this.card.rotation.set(0, 0, lean);
   }
 
+  /** White at noon. Dims the card with the day so it does not glow at night. */
+  setAlbedo(r: number, g: number, b: number): void {
+    this.cardMaterial.color.setRGB(r, g, b);
+    this.blobMaterial.color.setRGB(r, g, b);
+  }
+
   dispose(): void {
     this.card.geometry.dispose();
     this.blob.geometry.dispose();

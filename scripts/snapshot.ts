@@ -38,6 +38,9 @@ async function main(): Promise<void> {
       const outJson = outPng.replace(/\.png$/i, '.json');
       await mode7.setDistance(distance);
       for (let i = 0; i < warmup; i++) await mode7.tick(1, 1 / 60);
+      const time = args['time'];
+      if (time !== undefined) await mode7.setTimeOfDay(Number(time));
+      if (args['headlight'] === 'true') await mode7.setHeadlight(true);
       const dataUrl = await mode7.screenshot();
       const b64 = dataUrl.replace(/^data:image\/png;base64,/, '');
       await mkdir(dirname(outPng), { recursive: true });

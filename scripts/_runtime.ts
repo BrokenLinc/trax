@@ -63,6 +63,8 @@ export interface Mode7Tunnel {
   setDistance(d: number): Promise<void>;
   setSpeed(s: number): Promise<void>;
   setLateralX(x: number): Promise<void>;
+  setTimeOfDay(time: number): Promise<void>;
+  setHeadlight(on: boolean): Promise<void>;
   tick(frames?: number, dt?: number): Promise<void>;
   dumpMesh(): Promise<ReturnType<Mode7Inspector['dumpMesh']>>;
   dumpWorld(opts?: {
@@ -81,6 +83,8 @@ function makeTunnel(page: Page): Mode7Tunnel {
     setDistance: (d) => page.evaluate((v) => window.__MODE7__!.setDistance(v), d),
     setSpeed: (s) => page.evaluate((v) => window.__MODE7__!.setSpeed(v), s),
     setLateralX: (x) => page.evaluate((v) => window.__MODE7__!.setLateralX(v), x),
+    setTimeOfDay: (time) => page.evaluate((v) => window.__MODE7__!.setTimeOfDay(v), time),
+    setHeadlight: (on) => page.evaluate((v) => window.__MODE7__!.setHeadlight(v), on),
     tick: (frames = 1, dt = 1 / 60) =>
       page.evaluate((args) => window.__MODE7__!.tick(args.frames, args.dt), { frames, dt }),
     dumpMesh: () => page.evaluate(() => window.__MODE7__!.dumpMesh()),

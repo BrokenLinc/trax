@@ -8,6 +8,14 @@ import { createScene, SceneFog } from './render/scene.ts';
 import { TerrainMesh, type TerrainSnapshot } from './render/terrainMesh.ts';
 import { PlayerMesh } from './render/playerMesh.ts';
 import { SkyRig } from './render/skyRig.ts';
+import {
+  colorHex,
+  DEFAULT_DAY_LENGTH_SECONDS,
+  NOON,
+  sampleDayNight,
+  wrapDayTime,
+  type DayNightSample,
+} from './render/dayNight.ts';
 import { SpriteLayer } from './render/spriteLayer.ts';
 import { WaterPlane } from './render/waterPlane.ts';
 import { DebugDraw } from './render/debugDraw.ts';
@@ -57,6 +65,10 @@ export class App {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly camera: ChaseCamera;
   private readonly scene: THREE.Scene;
+  private readonly ambient: THREE.AmbientLight;
+  private readonly sun: THREE.DirectionalLight;
+  private readonly moonLight: THREE.DirectionalLight;
+  private readonly headlight: THREE.SpotLight;
   private readonly sceneFog: SceneFog;
   private readonly terrain: TerrainMesh;
   private readonly playerMesh: PlayerMesh;
@@ -81,6 +93,8 @@ export class App {
   private fpsFrames = 0;
   private paused = false;
   private devOverlays = false;
+  private headlightOn = false;
+  private readonly day = { timeOfDay: NOON, dayLength: DEFAULT_DAY_LENGTH_SECONDS };
   private headless: boolean;
   /** Filled inside `render()` from `gl.VIEWPORT` after each pass boundary. */
   private glVpAfterMain: [number, number, number, number] | null = null;
@@ -103,7 +117,14 @@ export class App {
 
     const rig = createScene();
     this.scene = rig.scene;
+    this.ambient = rig.ambient;
+    this.sun = rig.sun;
+    this.moonLight = rig.moon;
     this.sceneFog = new SceneFog(this.scene);
+    this.headlight = new THREE.SpotLight(0xfff1d4, 0, 78, 0.55, 0.92, 0.22);
+    this.headlight.castShadow = false;
+    this.scene.add(this.headlight);
+    this.scene.add(this.headlight.target);
 
     this.world = new World(opts.seed);
     this.water = new WaterPlane();
@@ -141,6 +162,7 @@ export class App {
           onReseed: () => this.reseed(),
           onPause: () => this.setPaused(!this.paused),
           onCamera: () => this.toggleCameraMode(),
+          onHeadlight: () => this.toggleHeadlight(),
         });
     // Always create the top-down: it's useful in headless screenshots too.
     // Pass a parent only when we actually have a visible DOM container.
@@ -157,6 +179,8 @@ export class App {
           debugDraw: this.debugDraw,
           topdown: this.topdown,
           sky: this.sky,
+          dayClock: this.day,
+          onTimeOfDay: () => this.applyDay(sampleDayNight(this.day.timeOfDay)),
           onWireframeChange: (v) => this.terrain.setWireframe(v),
           onDebugVisible: (v) => this.debugDraw.setVisible(v),
           onTopdownVisible: (v) => this.topdown.setVisible(v),
@@ -518,7 +542,12 @@ export class App {
     );
     this.camera.update(this.chaseRigContext());
     this.debugDraw.setAimVisible(this.camera.getMode() === 'aim');
-    this.sky.update(this.camera.camera.position.y, this.roadSwing());
+    if (dt > 0) {
+      this.day.timeOfDay = wrapDayTime(this.day.timeOfDay + dt / Math.max(1, this.day.dayLength));
+    }
+    const day = sampleDayNight(this.day.timeOfDay);
+    this.applyDay(day);
+    this.sky.update(this.camera.camera.position.y, this.roadSwing(), day);
     this.topdown.update(this.player.y);
     this.refreshOverlays();
   }
@@ -547,6 +576,7 @@ export class App {
       devOverlays: this.devOverlays,
       paused: this.paused,
       cameraLevel: this.camera.getMode() === 'level',
+      headlight: this.headlightOn,
     });
   }
 
@@ -651,10 +681,25 @@ export class App {
       this.topdown.setWorldSpaceMode(!this.topdown.isWorldSpaceMode());
     } else if (e.code === 'KeyC') {
       this.toggleCameraMode();
+    } else if (e.code === 'KeyH') {
+      this.toggleHeadlight();
     } else if (e.code === 'Backquote') {
       this.setDevOverlays(!this.devOverlays);
     }
   };
+
+  /** `time` wraps. 0 is midnight, 0.5 is noon. */
+  setTimeOfDay(time: number): void {
+    this.day.timeOfDay = wrapDayTime(time);
+    this.simulate(0);
+    this.render();
+  }
+
+  setHeadlight(on: boolean): void {
+    this.headlightOn = on;
+    this.applyDay(sampleDayNight(this.day.timeOfDay));
+    this.render();
+  }
 
   private toggleWireframe(): void {
     this.terrain.setWireframe(!this.terrain.isWireframe());
@@ -666,6 +711,36 @@ export class App {
 
   private toggleCameraMode(): void {
     this.camera.toggleMode();
+  }
+
+  private toggleHeadlight(): void {
+    this.headlightOn = !this.headlightOn;
+    this.applyDay(sampleDayNight(this.day.timeOfDay));
+    this.refreshOverlays();
+  }
+
+  private applyDay(day: DayNightSample): void {
+    this.sceneFog.setColor(colorHex(day.fog));
+    this.ambient.color.setRGB(day.ambient.color.r, day.ambient.color.g, day.ambient.color.b);
+    this.ambient.intensity = day.ambient.intensity;
+    this.sun.color.setRGB(day.sun.color.r, day.sun.color.g, day.sun.color.b);
+    this.sun.intensity = day.sun.intensity;
+    this.sun.position.set(day.sun.x, day.sun.y, day.sun.z);
+    this.moonLight.color.setRGB(
+      day.moonLight.color.r,
+      day.moonLight.color.g,
+      day.moonLight.color.b,
+    );
+    this.moonLight.intensity = day.moonLight.intensity;
+    this.moonLight.position.set(day.moonLight.x, day.moonLight.y, day.moonLight.z);
+    this.sprites.setAlbedo(day.albedo.r, day.albedo.g, day.albedo.b);
+    this.playerMesh.setAlbedo(day.albedo.r, day.albedo.g, day.albedo.b);
+    this.headlight.intensity = this.headlightOn ? 70 : 0;
+    this.headlight.visible = this.headlightOn;
+    const y = this.player.y;
+    // Ahead of the rider, aimed down the lane, so the cone is a corridor not a puddle.
+    this.headlight.position.set(0, y + 1.15, -1.6);
+    this.headlight.target.position.set(0, y + 0.2, -46);
   }
 
   private reseed(): void {

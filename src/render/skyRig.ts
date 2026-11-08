@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 
+import type { DayNightSample } from './dayNight.ts';
 import { loadColorTexture } from './loadTexture.ts';
 
 const SKY_URL = '/sprites/sky.png';
@@ -51,6 +52,8 @@ export class SkyRig {
   readonly group = new THREE.Group();
   private readonly sky: THREE.Mesh;
   private readonly horizon: THREE.Mesh;
+  private readonly stars: THREE.Mesh;
+  private readonly moon: THREE.Mesh;
   private readonly clouds: CloudSlot[];
   private readonly materials: THREE.Material[] = [];
   private readonly textures: THREE.Texture[] = [];
@@ -87,6 +90,38 @@ export class SkyRig {
     this.horizon.renderOrder = -80;
     this.horizon.frustumCulled = false;
     this.group.add(this.horizon);
+
+    const starMat = new THREE.MeshBasicMaterial({
+      map: createStarTexture(),
+      transparent: true,
+      depthWrite: false,
+      toneMapped: false,
+      fog: false,
+      opacity: 0,
+    });
+    this.materials.push(starMat);
+    this.textures.push(starMat.map as THREE.Texture);
+    this.stars = new THREE.Mesh(new THREE.PlaneGeometry(2200, 1100), starMat);
+    this.stars.renderOrder = -90;
+    this.stars.frustumCulled = false;
+    this.stars.visible = false;
+    this.group.add(this.stars);
+
+    const moonMat = new THREE.MeshBasicMaterial({
+      map: createMoonTexture(),
+      transparent: true,
+      depthWrite: false,
+      toneMapped: false,
+      fog: false,
+      opacity: 0,
+    });
+    this.materials.push(moonMat);
+    this.textures.push(moonMat.map as THREE.Texture);
+    this.moon = new THREE.Mesh(new THREE.PlaneGeometry(78, 78), moonMat);
+    this.moon.renderOrder = -75;
+    this.moon.frustumCulled = false;
+    this.moon.visible = false;
+    this.group.add(this.moon);
 
     const layout: Array<{
       tex: THREE.Texture;
@@ -131,17 +166,40 @@ export class SkyRig {
 
   /**
    * `cameraY` is the chase eye height. `swing` is metres of road offset
-   * ahead of the player. Rotation stays identity.
+   * ahead of the player. `day` tints the cards and fades the stars and moon.
+   * Rotation stays identity.
    */
-  update(cameraY: number, swing: number): void {
+  update(cameraY: number, swing: number, day: DayNightSample): void {
     const skyX = swing * 1.3;
     const horizonX = swing * 1.3;
     this.sky.position.set(skyX, cameraY + 70, -820);
     this.sky.quaternion.identity();
     this.sky.rotation.set(0, 0, 0);
+    paint(this.sky, day.sky);
     this.horizon.position.set(horizonX, cameraY + 8, -740);
     this.horizon.quaternion.identity();
     this.horizon.rotation.set(0, 0, 0);
+    paint(this.horizon, day.horizon);
+    this.stars.position.set(skyX, cameraY + 78, -800);
+    this.stars.quaternion.identity();
+    this.stars.rotation.set(0, 0, 0);
+    const starMat = this.stars.material;
+    if (starMat instanceof THREE.MeshBasicMaterial) {
+      starMat.opacity = day.star;
+      this.stars.visible = day.star > 0.02;
+    }
+    this.moon.position.set(
+      day.moonAcross * 460 + swing * 0.4,
+      cameraY + 36 + day.moonUp * 210,
+      -720,
+    );
+    this.moon.quaternion.identity();
+    this.moon.rotation.set(0, 0, 0);
+    const moonMat = this.moon.material;
+    if (moonMat instanceof THREE.MeshBasicMaterial) {
+      moonMat.opacity = day.moon;
+      this.moon.visible = day.moon > 0.02;
+    }
     const span = CLOUD_FAR_Z - CLOUD_NEAR_Z;
     for (const cloud of this.clouds) {
       const depth = THREE.MathUtils.clamp((-cloud.z - CLOUD_NEAR_Z) / span, 0, 1);
@@ -149,15 +207,93 @@ export class SkyRig {
       cloud.mesh.position.set(cloud.x + swing * share, cameraY + cloud.altitude, cloud.z);
       cloud.mesh.quaternion.identity();
       cloud.mesh.rotation.set(0, 0, 0);
+      paint(cloud.mesh, day.cloud);
     }
   }
 
   dispose(): void {
     this.sky.geometry.dispose();
     this.horizon.geometry.dispose();
+    this.stars.geometry.dispose();
+    this.moon.geometry.dispose();
     for (const cloud of this.clouds) cloud.mesh.geometry.dispose();
     for (const mat of this.materials) mat.dispose();
     for (const tex of this.textures) tex.dispose();
     this.group.removeFromParent();
   }
+}
+
+function paint(mesh: THREE.Mesh, color: { r: number; g: number; b: number }): void {
+  const mat = mesh.material;
+  if (mat instanceof THREE.MeshBasicMaterial) mat.color.setRGB(color.r, color.g, color.b);
+}
+
+/** Pinpoints on a clear night. The card is huge, so each star is one texel plus a faint halo. */
+function createStarTexture(): THREE.DataTexture {
+  const w = 2048;
+  const h = 1024;
+  const data = new Uint8Array(w * h * 4);
+  let n = 0x12345678;
+  const rand = (): number => {
+    n = (Math.imul(n, 1664525) + 1013904223) >>> 0;
+    return n / 4294967296;
+  };
+  const plot = (x: number, y: number, r: number, g: number, b: number, a: number): void => {
+    if (x < 0 || y < 0 || x >= w || y >= h) return;
+    const p = (y * w + x) * 4;
+    const prev = data[p + 3] ?? 0;
+    if (a < prev) return;
+    data[p] = r;
+    data[p + 1] = g;
+    data[p + 2] = b;
+    data[p + 3] = a;
+  };
+  for (let i = 0; i < 2400; i++) {
+    const x = Math.floor(rand() * w);
+    const y = Math.floor(rand() * h);
+    const roll = rand();
+    const bright = roll > 0.96 ? 255 : roll > 0.7 ? 235 : 190;
+    const warm = rand();
+    const r = warm > 0.92 ? 255 : warm < 0.07 ? 176 : bright;
+    const b = warm < 0.07 ? 255 : bright;
+    plot(x, y, r, bright, b, 255);
+    if (roll > 0.86) {
+      const halo = roll > 0.96 ? 150 : 70;
+      plot(x - 1, y, r, bright, b, halo);
+      plot(x + 1, y, r, bright, b, halo);
+      plot(x, y - 1, r, bright, b, halo);
+      plot(x, y + 1, r, bright, b, halo);
+    }
+  }
+  const tex = new THREE.DataTexture(data, w, h);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function createMoonTexture(): THREE.DataTexture {
+  const n = 64;
+  const data = new Uint8Array(n * n * 4);
+  const c = (n - 1) / 2;
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const d = Math.hypot(x - c, y - c) / c;
+      const a = d >= 1 ? 0 : (1 - d) ** 0.45 * 255;
+      const i = (y * n + x) * 4;
+      data[i] = 255;
+      data[i + 1] = 246;
+      data[i + 2] = 214;
+      data[i + 3] = a;
+    }
+  }
+  const tex = new THREE.DataTexture(data, n, n);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  tex.needsUpdate = true;
+  return tex;
 }

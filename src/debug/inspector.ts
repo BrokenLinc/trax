@@ -71,6 +71,9 @@ export interface Mode7Inspector {
   setLateralX(lateralX: number): void;
   setPaused(paused: boolean): void;
   setHeadless(headless: boolean): void;
+  /** 0 is midnight, 0.5 is noon. Wraps. */
+  setTimeOfDay(time: number): void;
+  setHeadlight(on: boolean): void;
   /** Advance `frames` frames using a fixed `dt` per frame (default 1/60). */
   tick(frames?: number, dt?: number): void;
   /** Snapshot the current bend window, prefix sums, and offsets. */
@@ -136,6 +139,8 @@ export function installInspector(app: App): Mode7Inspector {
     setLateralX: (x) => app.setLateralX(x),
     setPaused: (p) => app.setPaused(p),
     setHeadless: (h) => app.setHeadless(h),
+    setTimeOfDay: (t) => app.setTimeOfDay(t),
+    setHeadlight: (on) => app.setHeadlight(on),
     tick: (frames = 1, dt = 1 / 60) => app.tick(frames, dt),
     dumpMesh: () => app.dumpMesh(),
     dumpWorld: (opts) => app.dumpWorld(opts),
