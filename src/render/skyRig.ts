@@ -200,7 +200,8 @@ export class SkyRig {
     const moonMat = this.moon.material;
     if (moonMat instanceof THREE.MeshBasicMaterial) {
       moonMat.opacity = day.moon;
-      this.moon.visible = day.moon > 0.02;
+      // Parked. The fill light still stands in for it.
+      this.moon.visible = false;
     }
     const span = CLOUD_FAR_Z - CLOUD_NEAR_Z;
     for (const cloud of this.clouds) {

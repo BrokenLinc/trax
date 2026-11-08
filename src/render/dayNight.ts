@@ -24,6 +24,11 @@ export interface DayLight {
 /**
  * One instant of the cycle. Colors are 0–1 multipliers or fog channels.
  * `star` and `moon` are opacities. Sun elevation is in the light's Y.
+ *
+ * Sky and clouds take the saturated stops. The sun and ambient take that
+ * hue as a gel, so the foreground shifts with the sky. Fog is the noon
+ * mountain haze multiplied by the same tint as the mountain card, which
+ * keeps the hills fading into the painted range instead of a flat wash.
  */
 export interface DayNightSample {
   time: number;
@@ -32,8 +37,6 @@ export interface DayNightSample {
   sky: DayColor;
   fog: DayColor;
   cloud: DayColor;
-  /** White at noon. Tints unlit trees and the rider so they go dark at night. */
-  albedo: DayColor;
   /** Mountain card. White at noon so the painted range is unchanged. */
   horizon: DayColor;
   star: number;
@@ -49,69 +52,33 @@ export interface DayNightSample {
 interface Stop {
   t: number;
   sky: DayColor;
-  fog: DayColor;
   cloud: DayColor;
-  albedo: DayColor;
 }
+
+/** Noon sun and ambient. The cycle multiplies these by the sky gel. */
+const NOON_SUN = 0xfff1d6;
+const NOON_AMBIENT = 0xd7dee6;
+
+/**
+ * Mountain-card multiply once the sun is gone. Dark enough that the painted
+ * range doesn't glow, blue enough that the night fog still meets it.
+ */
+const NIGHT_MOUNTAIN = rgb(0.12, 0.14, 0.25);
 
 const MIDNIGHT: Omit<Stop, 't'> = {
   sky: rgb(0.04, 0.06, 0.16),
-  fog: rgb(0.06, 0.08, 0.16),
   cloud: rgb(0.16, 0.18, 0.32),
-  albedo: rgb(0.2, 0.22, 0.32),
 };
 
 const STOPS: readonly Stop[] = [
   { t: 0, ...MIDNIGHT },
-  {
-    t: 0.18,
-    sky: rgb(0.09, 0.1, 0.3),
-    fog: rgb(0.1, 0.12, 0.28),
-    cloud: rgb(0.26, 0.24, 0.46),
-    albedo: rgb(0.32, 0.3, 0.46),
-  },
-  {
-    t: 0.25,
-    sky: rgb(1, 0.38, 0.22),
-    fog: rgb(0.98, 0.52, 0.32),
-    cloud: rgb(1, 0.58, 0.4),
-    albedo: rgb(1, 0.78, 0.62),
-  },
-  {
-    t: 0.33,
-    sky: rgb(0.75, 0.86, 1),
-    fog: rgb(0.7, 0.78, 0.86),
-    cloud: rgb(1, 0.94, 0.88),
-    albedo: rgb(1, 0.97, 0.92),
-  },
-  {
-    t: 0.5,
-    sky: rgb(1, 1, 1),
-    fog: hexColor(NOON_FOG),
-    cloud: rgb(1, 1, 1),
-    albedo: rgb(1, 1, 1),
-  },
-  {
-    t: 0.67,
-    sky: rgb(1, 0.86, 0.62),
-    fog: rgb(0.86, 0.68, 0.5),
-    cloud: rgb(1, 0.82, 0.62),
-    albedo: rgb(1, 0.94, 0.84),
-  },
-  {
-    t: 0.75,
-    sky: rgb(1, 0.28, 0.48),
-    fog: rgb(0.92, 0.36, 0.46),
-    cloud: rgb(1, 0.42, 0.55),
-    albedo: rgb(1, 0.7, 0.64),
-  },
-  {
-    t: 0.84,
-    sky: rgb(0.32, 0.14, 0.48),
-    fog: rgb(0.24, 0.14, 0.36),
-    cloud: rgb(0.48, 0.28, 0.58),
-    albedo: rgb(0.42, 0.34, 0.52),
-  },
+  { t: 0.18, sky: rgb(0.09, 0.1, 0.3), cloud: rgb(0.26, 0.24, 0.46) },
+  { t: 0.25, sky: rgb(1, 0.38, 0.22), cloud: rgb(1, 0.58, 0.4) },
+  { t: 0.33, sky: rgb(0.75, 0.86, 1), cloud: rgb(1, 0.94, 0.88) },
+  { t: 0.5, sky: rgb(1, 1, 1), cloud: rgb(1, 1, 1) },
+  { t: 0.67, sky: rgb(1, 0.86, 0.62), cloud: rgb(1, 0.82, 0.62) },
+  { t: 0.75, sky: rgb(1, 0.28, 0.48), cloud: rgb(1, 0.42, 0.55) },
+  { t: 0.84, sky: rgb(0.32, 0.14, 0.48), cloud: rgb(0.48, 0.28, 0.58) },
   { t: 1, ...MIDNIGHT },
 ];
 
@@ -127,17 +94,22 @@ export function sampleDayNight(time: number): DayNightSample {
   const across = Math.cos(phase);
   const up = Math.max(0, elevation);
   const painted = blendStops(t);
-  const day = smoothstep(-0.15, 0.55, elevation);
+  const skyBright = Math.max(painted.sky.r, painted.sky.g, painted.sky.b);
+  // Follow the sky, not the sun's elevation, so a bright sunset still lights the road.
+  const day = smoothstep(0.18, 0.72, skyBright);
   const moon = elevation < 0 ? smoothstep(0, 0.55, -elevation) : 0;
   const sunIntensity = up <= 0 ? 0 : 0.42 + 0.16 * Math.min(1, up / 0.35);
+  const lightGel = skyLightTint(painted.sky, 0.85);
+  const mountainGel = skyLightTint(painted.sky, 0.4);
+  const mountainsLit = smoothstep(-0.45, 0.12, elevation);
+  const horizon = lerpColor(NIGHT_MOUNTAIN, mountainGel, mountainsLit);
   return {
     time: t,
     sunElevation: elevation,
     sky: painted.sky,
-    fog: painted.fog,
+    fog: multiplyColor(hexColor(NOON_FOG), horizon),
     cloud: painted.cloud,
-    albedo: painted.albedo,
-    horizon: lerpColor(painted.fog, rgb(1, 1, 1), day),
+    horizon,
     // Off while the sun is up. Full only once it is well below the horizon.
     star: smoothstep(0.02, -0.5, elevation),
     moon,
@@ -148,7 +120,7 @@ export function sampleDayNight(time: number): DayNightSample {
       x: across * 22,
       y: up * 40 + (up > 0 ? 8 : -4),
       z: 12,
-      color: lerpColor(rgb(1, 0.42, 0.16), hexColor(0xfff1d6), Math.min(1, up)),
+      color: multiplyColor(hexColor(NOON_SUN), lightGel),
       intensity: sunIntensity,
     },
     moonLight: {
@@ -159,7 +131,7 @@ export function sampleDayNight(time: number): DayNightSample {
       intensity: moon * 0.16,
     },
     ambient: {
-      color: lerpColor(rgb(0.1, 0.13, 0.26), hexColor(0xd7dee6), day),
+      color: multiplyColor(hexColor(NOON_AMBIENT), lightGel),
       intensity: 0.16 + 0.74 * day,
     },
   };
@@ -183,10 +155,22 @@ function blendStops(t: number): Stop {
   return {
     t,
     sky: lerpColor(a.sky, b.sky, u),
-    fog: lerpColor(a.fog, b.fog, u),
     cloud: lerpColor(a.cloud, b.cloud, u),
-    albedo: lerpColor(a.albedo, b.albedo, u),
   };
+}
+
+/** Sky hue lifted to a bright gel. `amount` is how fully the hue replaces white. */
+function skyLightTint(sky: DayColor, amount: number): DayColor {
+  const max = Math.max(sky.r, sky.g, sky.b);
+  if (max <= 1e-4) return rgb(1, 1, 1);
+  const hue = rgb(sky.r / max, sky.g / max, sky.b / max);
+  const min = Math.min(sky.r, sky.g, sky.b);
+  const sat = (max - min) / max;
+  return lerpColor(rgb(1, 1, 1), hue, sat * amount);
+}
+
+function multiplyColor(a: DayColor, b: DayColor): DayColor {
+  return { r: a.r * b.r, g: a.g * b.g, b: a.b * b.b };
 }
 
 function lerpColor(a: DayColor, b: DayColor, u: number): DayColor {

@@ -59,14 +59,14 @@ export class PlayerMesh {
   private readonly card: THREE.Mesh;
   private readonly blob: THREE.Mesh;
   private readonly texture: THREE.Texture;
-  private readonly cardMaterial: THREE.MeshBasicMaterial;
+  private readonly cardMaterial: THREE.MeshLambertMaterial;
   private readonly blobMaterial: THREE.MeshBasicMaterial;
   private readonly params: PlayerMeshParams;
 
   constructor(params: PlayerMeshParams = DEFAULT_PLAYER_MESH) {
     this.params = params;
     this.texture = loadColorTexture(RIDER_URL, configureRider);
-    this.cardMaterial = new THREE.MeshBasicMaterial({
+    this.cardMaterial = new THREE.MeshLambertMaterial({
       map: this.texture,
       alphaTest: 0.35,
       toneMapped: false,
@@ -119,7 +119,7 @@ export class PlayerMesh {
     this.card.rotation.set(0, 0, lean);
   }
 
-  /** White at noon. Dims the card with the day so it does not glow at night. */
+  /** Optional paint multiplier. Night falloff comes from the scene lights. */
   setAlbedo(r: number, g: number, b: number): void {
     this.cardMaterial.color.setRGB(r, g, b);
     this.blobMaterial.color.setRGB(r, g, b);

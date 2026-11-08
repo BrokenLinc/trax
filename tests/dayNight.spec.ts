@@ -10,16 +10,19 @@ describe('dayNight', () => {
     expect(noon.star).toBe(0);
     expect(noon.moon).toBe(0);
     expect(noon.sky.r).toBeCloseTo(1, 2);
-    expect(noon.albedo.r).toBeCloseTo(1, 2);
+    expect(noon.horizon.r).toBeCloseTo(1, 2);
+    expect(noon.sun.color.r).toBeGreaterThan(0.95);
   });
 
-  it('makes sunset warm with the sun on the horizon', () => {
+  it('gels the sunset light and keeps fog on the mountain haze', () => {
     const noon = sampleDayNight(0.5);
     const sunset = sampleDayNight(0.75);
     expect(sunset.sun.y).toBeLessThan(noon.sun.y);
     expect(sunset.sun.intensity).toBeGreaterThan(0);
-    expect(sunset.fog.r).toBeGreaterThan(sunset.fog.b + 0.2);
+    expect(sunset.sun.color.r).toBeGreaterThan(sunset.sun.color.b + 0.15);
     expect(sunset.cloud.r).toBeGreaterThan(sunset.cloud.b);
+    expect(sunset.fog.r / sunset.fog.b).toBeGreaterThan(noon.fog.r / noon.fog.b);
+    expect(sunset.sky.r - sunset.sky.g).toBeGreaterThan(sunset.fog.r - sunset.fog.g);
     expect(sunset.star).toBeLessThan(0.5);
   });
 
@@ -29,7 +32,8 @@ describe('dayNight', () => {
     expect(night.star).toBeGreaterThan(0.9);
     expect(night.moon).toBeGreaterThan(0.8);
     expect(night.fog.b).toBeGreaterThan(night.fog.r);
-    expect(night.albedo.r).toBeLessThan(0.4);
+    expect(night.horizon.r).toBeLessThan(0.35);
+    expect(night.fog.r).toBeLessThan(0.2);
   });
 
   it('wraps the clock', () => {

@@ -74,8 +74,8 @@ function tintIndex(row: number, localX: number): number {
   return ((n % TINTS.length) + TINTS.length) % TINTS.length;
 }
 
-function cutoutMaterial(map: THREE.Texture, tint: number): THREE.MeshBasicMaterial {
-  const mat = new THREE.MeshBasicMaterial({
+function cutoutMaterial(map: THREE.Texture, tint: number): THREE.MeshLambertMaterial {
+  return new THREE.MeshLambertMaterial({
     map,
     alphaTest: 0.58,
     side: THREE.DoubleSide,
@@ -83,7 +83,6 @@ function cutoutMaterial(map: THREE.Texture, tint: number): THREE.MeshBasicMateri
     depthWrite: true,
     color: tint,
   });
-  return mat;
 }
 
 function imageAspect(tex: THREE.Texture, fallback: number): number {
@@ -101,8 +100,8 @@ function imageAspect(tex: THREE.Texture, fallback: number): number {
 export class SpriteLayer {
   readonly group = new THREE.Group();
   private world: World;
-  private readonly variants: Record<SceneryKind, THREE.MeshBasicMaterial[]>;
-  private readonly authoredTint = new WeakMap<THREE.MeshBasicMaterial, number>();
+  private readonly variants: Record<SceneryKind, THREE.MeshLambertMaterial[]>;
+  private readonly authoredTint = new WeakMap<THREE.MeshLambertMaterial, number>();
   private readonly textures: Record<SceneryKind, THREE.Texture>;
   private readonly pool: THREE.Mesh[] = [];
   private live: LiveSprite[] = [];
@@ -125,7 +124,7 @@ export class SpriteLayer {
 
     const kinds: SceneryKind[] = ['broadleaf', 'pine', 'shrub', 'post', 'rock'];
     const maps = {} as Record<SceneryKind, THREE.Texture>;
-    const variants = {} as Record<SceneryKind, THREE.MeshBasicMaterial[]>;
+    const variants = {} as Record<SceneryKind, THREE.MeshLambertMaterial[]>;
     for (const kind of kinds) {
       const tex = textures?.[kind] ?? loadColorTexture(SPRITE_URL[kind], configureCutout);
       maps[kind] = tex;
@@ -148,7 +147,7 @@ export class SpriteLayer {
     this.builtSeed = '';
   }
 
-  /** Multiply each card's authored tint. White at noon, dim at night. */
+  /** Multiply each card's authored tint. The day cycle leaves this at the paint. */
   setAlbedo(r: number, g: number, b: number): void {
     const scale = new THREE.Color(r, g, b);
     for (const list of Object.values(this.variants)) {

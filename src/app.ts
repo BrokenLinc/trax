@@ -733,8 +733,6 @@ export class App {
     );
     this.moonLight.intensity = day.moonLight.intensity;
     this.moonLight.position.set(day.moonLight.x, day.moonLight.y, day.moonLight.z);
-    this.sprites.setAlbedo(day.albedo.r, day.albedo.g, day.albedo.b);
-    this.playerMesh.setAlbedo(day.albedo.r, day.albedo.g, day.albedo.b);
     this.headlight.intensity = this.headlightOn ? 70 : 0;
     this.headlight.visible = this.headlightOn;
     const y = this.player.y;
