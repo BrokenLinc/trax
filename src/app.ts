@@ -444,16 +444,25 @@ export class App {
   // --- Internals -----------------------------------------------------------
 
   /**
-   * Tangent-aligned sideways offset of the road at the fog line, in metres.
-   * That is the bend still visible, and the sky layers share it at different rates.
+   * Tangent-aligned sideways offset of the road one fog-distance ahead, in
+   * metres. The sample stays on the fractional row `player + ahead`. Reading
+   * the integer row ahead of `floor(player)` instead walks back along that
+   * fixed row and snaps forward at every crossing, which is the sawtooth.
    */
   private roadSwing(): number {
     const playerRow = this.player.distance;
     const offsets = this.terrain.snapshot().offsets;
     const start = this.terrain.getWindowRowStart(playerRow);
-    const ahead = Math.round(this.sceneFog.getParams().far / this.terrain.getParams().rowSpacing);
-    const index = Math.min(offsets.length - 1, Math.max(0, Math.floor(playerRow) + ahead - start));
-    return offsets[index] ?? 0;
+    const ahead = this.sceneFog.getParams().far / this.terrain.getParams().rowSpacing;
+    const target = playerRow + ahead;
+    const row = Math.floor(target);
+    const last = offsets.length - 1;
+    if (last < 0) return 0;
+    const index = Math.min(last, Math.max(0, row - start));
+    const here = offsets[index] ?? 0;
+    const next = offsets[Math.min(last, index + 1)] ?? here;
+    const frac = target - row;
+    return here + frac * (next - here);
   }
 
   private chaseRigContext(): {
