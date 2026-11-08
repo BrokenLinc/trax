@@ -7,6 +7,10 @@ const SKY_URL = '/sprites/sky.png';
 const CLOUD_A_URL = '/sprites/cloud-a.png';
 const CLOUD_B_URL = '/sprites/cloud-b.png';
 const HORIZON_URL = '/sprites/horizon.png';
+const MOON_URL = '/sprites/moon.png';
+
+/** World size of the moon card. Half the old generated disc. */
+const MOON_SIZE = 39;
 
 interface CloudSlot {
   mesh: THREE.Mesh;
@@ -64,7 +68,8 @@ export class SkyRig {
     const cloudA = loadColorTexture(CLOUD_A_URL, configureBackdrop);
     const cloudB = loadColorTexture(CLOUD_B_URL, configureBackdrop);
     const horizonTex = loadColorTexture(HORIZON_URL, configureBackdrop);
-    this.textures.push(skyTex, cloudA, cloudB, horizonTex);
+    const moonTex = loadColorTexture(MOON_URL, configureBackdrop);
+    this.textures.push(skyTex, cloudA, cloudB, horizonTex, moonTex);
 
     const skyMat = new THREE.MeshBasicMaterial({
       map: skyTex,
@@ -108,7 +113,7 @@ export class SkyRig {
     this.group.add(this.stars);
 
     const moonMat = new THREE.MeshBasicMaterial({
-      map: createMoonTexture(),
+      map: moonTex,
       transparent: true,
       depthWrite: false,
       toneMapped: false,
@@ -116,12 +121,12 @@ export class SkyRig {
       opacity: 0,
     });
     this.materials.push(moonMat);
-    this.textures.push(moonMat.map as THREE.Texture);
-    this.moon = new THREE.Mesh(new THREE.PlaneGeometry(78, 78), moonMat);
+    this.moon = new THREE.Mesh(new THREE.PlaneGeometry(MOON_SIZE, MOON_SIZE), moonMat);
     this.moon.renderOrder = -75;
     this.moon.frustumCulled = false;
     this.moon.visible = false;
-    this.group.add(this.moon);
+    // Child of the horizon card, so a bend slides the moon with the mountains.
+    this.horizon.add(this.moon);
 
     const layout: Array<{
       tex: THREE.Texture;
@@ -188,11 +193,8 @@ export class SkyRig {
       starMat.opacity = day.star;
       this.stars.visible = day.star > 0.02;
     }
-    this.moon.position.set(
-      day.moonAcross * 460 + swing * 0.4,
-      cameraY + 36 + day.moonUp * 210,
-      -720,
-    );
+    // Local to the horizon card: same swing, sitting up in the sky in front of it.
+    this.moon.position.set(day.moonAcross * 460, 28 + day.moonUp * 210, 20);
     this.moon.quaternion.identity();
     this.moon.rotation.set(0, 0, 0);
     const moonMat = this.moon.material;
@@ -266,30 +268,6 @@ function createStarTexture(): THREE.DataTexture {
     }
   }
   const tex = new THREE.DataTexture(data, w, h);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.magFilter = THREE.LinearFilter;
-  tex.minFilter = THREE.LinearFilter;
-  tex.generateMipmaps = false;
-  tex.needsUpdate = true;
-  return tex;
-}
-
-function createMoonTexture(): THREE.DataTexture {
-  const n = 64;
-  const data = new Uint8Array(n * n * 4);
-  const c = (n - 1) / 2;
-  for (let y = 0; y < n; y++) {
-    for (let x = 0; x < n; x++) {
-      const d = Math.hypot(x - c, y - c) / c;
-      const a = d >= 1 ? 0 : (1 - d) ** 0.45 * 255;
-      const i = (y * n + x) * 4;
-      data[i] = 255;
-      data[i + 1] = 246;
-      data[i + 2] = 214;
-      data[i + 3] = a;
-    }
-  }
-  const tex = new THREE.DataTexture(data, n, n);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.magFilter = THREE.LinearFilter;
   tex.minFilter = THREE.LinearFilter;
