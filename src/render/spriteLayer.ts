@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 
 import type { World } from '../world/world.ts';
-import { sceneryInRange, type SceneryInstance, type SceneryKind } from '../world/scenery.ts';
+import {
+  sceneryInRange,
+  type SceneryHeight,
+  type SceneryInstance,
+  type SceneryKind,
+} from '../world/scenery.ts';
 import { signedColFromWorldX } from './meshLattice.ts';
 import { loadColorTexture } from './loadTexture.ts';
 
@@ -25,6 +30,7 @@ const FALLBACK_ASPECT: Record<SceneryKind, number> = {
 /** Past the fog the cards are a full-fog fill cost, so the window stops here. */
 const SCENERY_ROWS_AHEAD = 120;
 const SCENERY_ROWS_BEHIND = 18;
+const CARD_CAP = 420;
 
 const SINK: Record<SceneryKind, number> = {
   broadleaf: 1.1,
@@ -101,6 +107,8 @@ export class SpriteLayer {
   private builtSeed = '';
   private builtStart = Number.NaN;
   private builtEnd = Number.NaN;
+  private builtToken: readonly SceneryInstance[] | null = null;
+  private readonly ownsTextures: boolean;
 
   constructor(
     parent: THREE.Object3D,
@@ -109,6 +117,7 @@ export class SpriteLayer {
     textures?: Partial<Record<SceneryKind, THREE.Texture>>,
   ) {
     this.world = world;
+    this.ownsTextures = textures === undefined;
     this.group.frustumCulled = false;
     parent.add(this.group);
 
@@ -124,18 +133,40 @@ export class SpriteLayer {
     this.variants = variants;
   }
 
+  private aspectOf(kind: SceneryKind): number {
+    return imageAspect(this.textures[kind], FALLBACK_ASPECT[kind]);
+  }
+
   setWorld(world: World): void {
     this.world = world;
     this.builtSeed = '';
   }
 
-  update(playerRow: number): void {
+  /**
+   * `provided` is the card list for this window. The same array reference
+   * means the window has not changed. Omit it and the layer queries the
+   * ecology itself.
+   */
+  update(playerRow: number, provided?: readonly SceneryInstance[]): void {
     const params = this.anchor.getParams();
     const start = Math.floor(playerRow) - Math.min(params.rowsBehind, SCENERY_ROWS_BEHIND);
     const end = Math.floor(playerRow) + Math.min(params.rowsAhead, SCENERY_ROWS_AHEAD);
     const seed = this.world.getSeed();
-    if (seed !== this.builtSeed || start !== this.builtStart || end !== this.builtEnd) {
-      this.rebuild(seed, start, end);
+    const token = provided ?? null;
+    if (
+      seed !== this.builtSeed ||
+      start !== this.builtStart ||
+      end !== this.builtEnd ||
+      token !== this.builtToken
+    ) {
+      const height = depthHeight(this.world, params.roadColSpacing, params.landscapeColSpacing);
+      const queried = provided ?? sceneryInRange(seed, start, end, height);
+      const instances = capInstances(queried, playerRow);
+      this.rebuild(instances);
+      this.builtSeed = seed;
+      this.builtStart = start;
+      this.builtEnd = end;
+      this.builtToken = token;
     }
     this.place(params.rowSpacing, params.roadColSpacing, params.landscapeColSpacing);
   }
@@ -149,12 +180,13 @@ export class SpriteLayer {
     for (const list of Object.values(this.variants)) {
       for (const mat of list) mat.dispose();
     }
-    for (const tex of Object.values(this.textures)) tex.dispose();
+    if (this.ownsTextures) {
+      for (const tex of Object.values(this.textures)) tex.dispose();
+    }
     this.group.removeFromParent();
   }
 
-  private rebuild(seed: string, start: number, end: number): void {
-    const instances = sceneryInRange(seed, start, end);
+  private rebuild(instances: readonly SceneryInstance[]): void {
     while (this.pool.length < instances.length) {
       const fallback = this.variants.broadleaf[0];
       if (!fallback) throw new Error('sprite materials missing');
@@ -178,9 +210,6 @@ export class SpriteLayer {
       const mesh = this.pool[i];
       if (mesh) mesh.visible = false;
     }
-    this.builtSeed = seed;
-    this.builtStart = start;
-    this.builtEnd = end;
   }
 
   private place(rowSpacing: number, roadColSpacing: number, landscapeColSpacing: number): void {
@@ -190,27 +219,90 @@ export class SpriteLayer {
         mesh.visible = false;
         continue;
       }
-      const col = signedColFromWorldX(inst.localX, roadColSpacing, landscapeColSpacing);
-      const c0 = Math.floor(col);
-      const along = col - c0;
-      // The mesh only stores height on integer columns and interpolates.
-      // Sampling the fractional column directly sits on the road datum, so
-      // a tree on a falling shoulder floats.
-      const y0 = this.world.depth.sample(inst.row, c0);
-      const y1 = this.world.depth.sample(inst.row, c0 + 1);
-      const groundY = y0 + (y1 - y0) * along;
-      const aspect = imageAspect(this.textures[inst.kind], FALLBACK_ASPECT[inst.kind]);
-      const height = inst.height;
-      const width = height * aspect;
-      mesh.visible = true;
-      mesh.position.set(
-        centreX + inst.localX,
-        groundY + height * 0.5 - SINK[inst.kind],
-        -inst.row * rowSpacing,
+      const posed = sceneryPlacement(
+        inst,
+        centreX,
+        this.world,
+        rowSpacing,
+        roadColSpacing,
+        landscapeColSpacing,
+        this.aspectOf(inst.kind),
       );
-      mesh.scale.set(inst.flip ? -width : width, height, 1);
+      mesh.visible = true;
+      mesh.position.set(posed.x, posed.y, posed.z);
+      mesh.scale.set(posed.flip ? -posed.width : posed.width, posed.height, 1);
       mesh.rotation.set(0, 0, 0);
       mesh.quaternion.identity();
     }
   }
+}
+
+function depthHeight(
+  world: World,
+  roadColSpacing: number,
+  landscapeColSpacing: number,
+): SceneryHeight {
+  return {
+    at(row, localX) {
+      const col = signedColFromWorldX(localX, roadColSpacing, landscapeColSpacing);
+      const c0 = Math.floor(col);
+      const along = col - c0;
+      const y0 = world.depth.sample(row, c0);
+      const y1 = world.depth.sample(row, c0 + 1);
+      return y0 + (y1 - y0) * along;
+    },
+  };
+}
+
+function capInstances(instances: readonly SceneryInstance[], playerRow: number): SceneryInstance[] {
+  if (instances.length <= CARD_CAP) return instances.slice();
+  return instances
+    .map((inst, index) => ({
+      inst,
+      index,
+      dist: Math.abs(inst.row - playerRow) + Math.abs(inst.localX) * 0.015,
+    }))
+    .sort((a, b) => a.dist - b.dist || a.index - b.index)
+    .slice(0, CARD_CAP)
+    .map((entry) => entry.inst);
+}
+
+export interface SceneryPlacement {
+  x: number;
+  y: number;
+  z: number;
+  width: number;
+  height: number;
+  flip: boolean;
+}
+
+/**
+ * Card pose in the world-root frame. Height is the lattice lerp, so a
+ * tree on a falling shoulder sits on the slope instead of the road.
+ */
+export function sceneryPlacement(
+  inst: SceneryInstance,
+  centreX: number,
+  world: World,
+  rowSpacing: number,
+  roadColSpacing: number,
+  landscapeColSpacing: number,
+  aspect: number,
+): SceneryPlacement {
+  const col = signedColFromWorldX(inst.localX, roadColSpacing, landscapeColSpacing);
+  const c0 = Math.floor(col);
+  const along = col - c0;
+  const y0 = world.depth.sample(inst.row, c0);
+  const y1 = world.depth.sample(inst.row, c0 + 1);
+  const groundY = y0 + (y1 - y0) * along;
+  const height = inst.height;
+  const width = height * aspect;
+  return {
+    x: centreX + inst.localX,
+    y: groundY + height * 0.5 - SINK[inst.kind],
+    z: -inst.row * rowSpacing,
+    width,
+    height,
+    flip: inst.flip,
+  };
 }

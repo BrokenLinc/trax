@@ -114,7 +114,7 @@ export function computeLevelRig(
 export class ChaseCamera {
   readonly camera: THREE.PerspectiveCamera;
   private params: ChaseCameraParams;
-  private mode: CameraMode = 'aim';
+  private mode: CameraMode = 'level';
   private readonly rig: ChaseRig = { eye: new THREE.Vector3(), aim: new THREE.Vector3() };
 
   constructor(aspect: number, initial?: ChaseCameraParams) {

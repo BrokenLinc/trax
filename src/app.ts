@@ -80,7 +80,7 @@ export class App {
   private fpsAccum = 0;
   private fpsFrames = 0;
   private paused = false;
-  private devOverlays = true;
+  private devOverlays = false;
   private headless: boolean;
   /** Filled inside `render()` from `gl.VIEWPORT` after each pass boundary. */
   private glVpAfterMain: [number, number, number, number] | null = null;
@@ -156,11 +156,13 @@ export class App {
           water: this.water,
           debugDraw: this.debugDraw,
           topdown: this.topdown,
+          sky: this.sky,
           onWireframeChange: (v) => this.terrain.setWireframe(v),
           onDebugVisible: (v) => this.debugDraw.setVisible(v),
           onTopdownVisible: (v) => this.topdown.setVisible(v),
           onTopdownWorldSpace: (v) => this.topdown.setWorldSpaceMode(v),
         });
+    this.setDevOverlays(false);
 
     this.resizeObserver = new ResizeObserver(() => {
       this.syncRendererSize();
@@ -441,6 +443,19 @@ export class App {
 
   // --- Internals -----------------------------------------------------------
 
+  /**
+   * Tangent-aligned sideways offset of the road at the fog line, in metres.
+   * That is the bend still visible, and the sky layers share it at different rates.
+   */
+  private roadSwing(): number {
+    const playerRow = this.player.distance;
+    const offsets = this.terrain.snapshot().offsets;
+    const start = this.terrain.getWindowRowStart(playerRow);
+    const ahead = Math.round(this.sceneFog.getParams().far / this.terrain.getParams().rowSpacing);
+    const index = Math.min(offsets.length - 1, Math.max(0, Math.floor(playerRow) + ahead - start));
+    return offsets[index] ?? 0;
+  }
+
   private chaseRigContext(): {
     playerGroundY: number;
     distance: number;
@@ -494,7 +509,7 @@ export class App {
     );
     this.camera.update(this.chaseRigContext());
     this.debugDraw.setAimVisible(this.camera.getMode() === 'aim');
-    this.sky.update(this.camera.camera.position.y);
+    this.sky.update(this.camera.camera.position.y, this.roadSwing());
     this.topdown.update(this.player.y);
     this.refreshOverlays();
   }

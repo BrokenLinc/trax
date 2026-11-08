@@ -14,6 +14,21 @@ interface CloudSlot {
   altitude: number;
 }
 
+/** Share of the road swing. 0 locks a cloud in place, 1 follows the bend. */
+export interface SkyCloudParallax {
+  near: number;
+  far: number;
+}
+
+/** Closest and farthest cloud cards. The one between them is a blend of these. */
+const CLOUD_NEAR_Z = 230;
+const CLOUD_FAR_Z = 380;
+
+const DEFAULT_CLOUD_PARALLAX: SkyCloudParallax = {
+  near: 0.45,
+  far: 0.65,
+};
+
 function configureBackdrop(tex: THREE.Texture): void {
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.magFilter = THREE.LinearFilter;
@@ -27,7 +42,10 @@ function configureBackdrop(tex: THREE.Texture): void {
 /**
  * Daytime backdrop. The cards face world +Z and only copy the camera's Y,
  * so a climb keeps the sky in frame without billboarding.
- * Fog is off: the terrain fog already fades the hills into this horizon.
+ * A corner passes in `swing`, the road's sideways offset ahead of the
+ * player. Each cloud takes a share of that swing, blended from `near` at
+ * the closest card to `far` at the farthest. Fog is off: the terrain fog
+ * already fades the hills into this horizon.
  */
 export class SkyRig {
   readonly group = new THREE.Group();
@@ -36,6 +54,7 @@ export class SkyRig {
   private readonly clouds: CloudSlot[];
   private readonly materials: THREE.Material[] = [];
   private readonly textures: THREE.Texture[] = [];
+  private readonly cloudParallax: SkyCloudParallax = { ...DEFAULT_CLOUD_PARALLAX };
 
   constructor() {
     const skyTex = loadColorTexture(SKY_URL, configureBackdrop);
@@ -100,16 +119,34 @@ export class SkyRig {
     });
   }
 
-  /** `cameraY` is the chase eye height. Rotation stays identity. */
-  update(cameraY: number): void {
-    this.sky.position.set(0, cameraY + 70, -820);
+  /** Live object. Mutate it, or pass it back through `setCloudParallax`. */
+  getCloudParallax(): SkyCloudParallax {
+    return this.cloudParallax;
+  }
+
+  setCloudParallax(parallax: SkyCloudParallax): void {
+    this.cloudParallax.near = parallax.near;
+    this.cloudParallax.far = parallax.far;
+  }
+
+  /**
+   * `cameraY` is the chase eye height. `swing` is metres of road offset
+   * ahead of the player. Rotation stays identity.
+   */
+  update(cameraY: number, swing: number): void {
+    const skyX = swing * 1.3;
+    const horizonX = swing * 1.3;
+    this.sky.position.set(skyX, cameraY + 70, -820);
     this.sky.quaternion.identity();
     this.sky.rotation.set(0, 0, 0);
-    this.horizon.position.set(0, cameraY + 8, -740);
+    this.horizon.position.set(horizonX, cameraY + 8, -740);
     this.horizon.quaternion.identity();
     this.horizon.rotation.set(0, 0, 0);
+    const span = CLOUD_FAR_Z - CLOUD_NEAR_Z;
     for (const cloud of this.clouds) {
-      cloud.mesh.position.set(cloud.x, cameraY + cloud.altitude, cloud.z);
+      const depth = THREE.MathUtils.clamp((-cloud.z - CLOUD_NEAR_Z) / span, 0, 1);
+      const share = THREE.MathUtils.lerp(this.cloudParallax.near, this.cloudParallax.far, depth);
+      cloud.mesh.position.set(cloud.x + swing * share, cameraY + cloud.altitude, cloud.z);
       cloud.mesh.quaternion.identity();
       cloud.mesh.rotation.set(0, 0, 0);
     }

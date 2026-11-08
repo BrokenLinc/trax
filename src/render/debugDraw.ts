@@ -14,7 +14,7 @@ export class DebugDraw {
   private readonly centreGeom: THREE.BufferGeometry;
   private centreLen: number;
   private readonly aimSphere: THREE.Mesh;
-  private visible = true;
+  private visible = false;
 
   constructor(rowCount: number) {
     this.centreLen = rowCount;
@@ -43,6 +43,7 @@ export class DebugDraw {
     );
     this.aimSphere.frustumCulled = false;
     this.group.add(this.aimSphere);
+    this.group.visible = false;
   }
 
   /** Match the terrain inspector bend window when `rowsAhead` / `rowsBehind` change. */

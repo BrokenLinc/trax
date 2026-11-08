@@ -54,7 +54,7 @@ export class TopDownView {
   readonly camera: THREE.OrthographicCamera;
   private readonly border: HTMLDivElement | null;
   private readonly label: HTMLDivElement | null;
-  private visible = true;
+  private visible = false;
   private worldSpaceMode = false;
 
   constructor(parent: HTMLElement | null) {
@@ -75,6 +75,8 @@ export class TopDownView {
       this.label = makeLabel();
       parent.appendChild(this.border);
       parent.appendChild(this.label);
+      this.border.style.display = 'none';
+      this.label.style.display = 'none';
     } else {
       this.border = null;
       this.label = null;

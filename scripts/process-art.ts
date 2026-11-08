@@ -143,6 +143,7 @@ async function seamless(
   output: string,
   axes: 'v' | 'both',
   size: number,
+  pixelStep = 160,
 ): Promise<void> {
   const { data, width, height } = await rawImage(input);
   const buf = Buffer.from(data);
@@ -193,7 +194,7 @@ async function seamless(
     }
   }
 
-  const small = 160;
+  const small = pixelStep;
   const shrunk = await sharp(buf, { raw: { width, height, channels: 4 } })
     .resize(small, small, { fit: 'fill', kernel: 'nearest' })
     .ensureAlpha()
@@ -243,6 +244,7 @@ async function main(): Promise<void> {
     resolve(PUBLIC, 'terrain-chunk-surface.png'),
     'v',
     1024,
+    320,
   );
   await seamless(
     resolve(RAW, 'ground-forest.jpg'),

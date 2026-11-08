@@ -8,6 +8,7 @@ import type { WaterPlane } from '../render/waterPlane.ts';
 import type { World } from '../world/world.ts';
 import type { DebugDraw } from '../render/debugDraw.ts';
 import type { PlayerController } from '../player/controller.ts';
+import type { SkyRig } from '../render/skyRig.ts';
 import type { TopDownView } from './topdownView.ts';
 
 /**
@@ -24,6 +25,7 @@ export function buildGui(opts: {
   water: WaterPlane;
   debugDraw: DebugDraw;
   topdown: TopDownView;
+  sky: SkyRig;
   onWireframeChange: (on: boolean) => void;
   onDebugVisible: (on: boolean) => void;
   onTopdownVisible: (on: boolean) => void;
@@ -60,6 +62,11 @@ export function buildGui(opts: {
     .add(visState, 'topdownWorldSpace')
     .name('topdown world-space')
     .onChange((v: boolean) => opts.onTopdownWorldSpace(v));
+
+  const clouds = opts.sky.getCloudParallax();
+  const syncClouds = (): void => opts.sky.setCloudParallax(clouds);
+  visuals.add(clouds, 'near', 0, 2, 0.01).name('cloud parallax near').onChange(syncClouds);
+  visuals.add(clouds, 'far', 0, 2, 0.01).name('cloud parallax far').onChange(syncClouds);
 
   const wp = opts.water.getParams();
   visuals
