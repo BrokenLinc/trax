@@ -12,11 +12,6 @@ import { signedColFromWorldX } from './meshLattice.ts';
 import { loadColorTexture } from './loadTexture.ts';
 
 const SPRITE_URL: Record<SceneryKind, string> = {
-  broadleaf: '/sprites/tree-broadleaf.png',
-  pine: '/sprites/tree-pine.png',
-  cedar: '/sprites/tree-cedar.png',
-  maple: '/sprites/tree-maple.png',
-  birch: '/sprites/tree-birch.png',
   shrub: '/sprites/shrub.png',
   bloom: '/sprites/shrub-flower.png',
   flowers: '/sprites/flowers.png',
@@ -26,11 +21,6 @@ const SPRITE_URL: Record<SceneryKind, string> = {
 
 /** Fallback aspect (width / height) used until the image has loaded. */
 const FALLBACK_ASPECT: Record<SceneryKind, number> = {
-  broadleaf: 0.85,
-  pine: 0.62,
-  cedar: 0.44,
-  maple: 0.63,
-  birch: 0.38,
   shrub: 1.15,
   bloom: 1.2,
   flowers: 1.54,
@@ -44,11 +34,6 @@ const SCENERY_ROWS_BEHIND = 18;
 const CARD_CAP = 700;
 
 const SINK: Record<SceneryKind, number> = {
-  broadleaf: 1.1,
-  pine: 0.85,
-  cedar: 0.9,
-  maple: 1.05,
-  birch: 0.7,
   shrub: 0.15,
   bloom: 0.12,
   flowers: 0.06,
@@ -58,11 +43,6 @@ const SINK: Record<SceneryKind, number> = {
 
 /** Degrees of hue rotation per stop. Lengths match `HUE_STOPS`. */
 const HUE_DEGREES: Record<SceneryKind, readonly number[]> = {
-  broadleaf: [-10, 0, 12],
-  pine: [-12, 0, 14],
-  cedar: [-8, 0, 16],
-  maple: [0, -28, -62, -105],
-  birch: [-6, 0, 8],
   shrub: [-18, 0, 16],
   bloom: [-8, 0, 8],
   flowers: [-6, 0, 6],
@@ -282,7 +262,7 @@ export class SpriteLayer {
 
   private rebuild(instances: readonly SceneryInstance[]): void {
     while (this.pool.length < instances.length) {
-      const fallback = this.variants.broadleaf[0];
+      const fallback = this.variants.shrub[0];
       if (!fallback) throw new Error('sprite materials missing');
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), fallback);
       mesh.frustumCulled = true;

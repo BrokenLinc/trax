@@ -1,37 +1,16 @@
 import { createRng, deriveSeed } from './rng.ts';
 import { makeNoise2D, type Noise2D } from './noise.ts';
 
-export type SceneryKind =
-  | 'broadleaf'
-  | 'pine'
-  | 'cedar'
-  | 'maple'
-  | 'birch'
-  | 'shrub'
-  | 'bloom'
-  | 'flowers'
-  | 'post'
-  | 'rock';
+export type SceneryKind = 'shrub' | 'bloom' | 'flowers' | 'post' | 'rock';
 
-/** How many baked hue stops each kind has. A grove shares one index. */
+/** How many baked hue stops each kind has. A patch shares one index. */
 export const HUE_STOPS: Record<SceneryKind, number> = {
-  broadleaf: 3,
-  pine: 3,
-  cedar: 3,
-  maple: 4,
-  birch: 3,
   shrub: 3,
   bloom: 3,
   flowers: 3,
   post: 1,
   rock: 1,
 };
-
-const TREES = new Set<SceneryKind>(['broadleaf', 'pine', 'cedar', 'maple', 'birch']);
-
-export function isTreeKind(kind: SceneryKind): boolean {
-  return TREES.has(kind);
-}
 
 export interface SceneryInstance {
   kind: SceneryKind;
@@ -55,10 +34,7 @@ export interface SceneryHeight {
 /** Nothing is allowed inside this distance of the centreline. */
 export const SCENERY_CLEARANCE_M = 8;
 
-/** Trees start outside the open shoulder. Grass and shrubs may sit closer. */
-export const TREE_MIN_M = 34;
-
-/** A spot this far below the road is a valley floor: no trees. */
+/** A spot this far below the road is a valley floor. Grass carpets it; the forest does too. */
 export const VALLEY_DROP_M = 6;
 
 const SHOULDER_MAX_M = 28;
@@ -98,14 +74,17 @@ interface Plant {
 }
 
 /**
- * Props for one integer row. Each kind follows its own noise field, so a
- * grove runs for many rows and then gives way. The shoulder stays open of
- * trees. Valley floors get shrubs instead.
+ * Shoulder props for one integer row. Trees live in the chunk-baked forest.
+ * Shrubs, flowers, posts, and rocks stay here, off the asphalt.
  */
-export function sceneryForRow(seed: string, row: number, height: SceneryHeight): SceneryInstance[] {
+export function sceneryForRow(
+  seed: string,
+  row: number,
+  _height: SceneryHeight,
+): SceneryInstance[] {
+  void _height;
   const rng = createRng(deriveSeed(seed, `scenery:${row}`));
   const noise = noiseFor(seed);
-  const roadY = height.at(row, 0);
   const plants: Plant[] = [];
 
   for (const side of [-1, 1] as const) {
@@ -138,75 +117,6 @@ export function sceneryForRow(seed: string, row: number, height: SceneryHeight):
         height: standHeight(0.7, 1.8, bloomStand, rng()),
         hue: hueIndex(bloomStand, HUE_STOPS.bloom),
       });
-    }
-
-    const conifer = unit(noise, row * 0.008, side * 1.15);
-    const maple = unit(noise, row * 0.016, side * 2.7);
-    const birch = unit(noise, row * 0.034, side * 4.8);
-    const coniferHue = hueIndex(unit(noise, row * 0.008, side * 11), HUE_STOPS.pine);
-
-    const plantTree = (
-      kind: SceneryKind,
-      localX: number,
-      min: number,
-      max: number,
-      hue: number,
-    ): void => {
-      const groundY = height.at(row, localX);
-      if (groundY < roadY - VALLEY_DROP_M) {
-        if (rng() < 0.22) {
-          plants.push({
-            kind: 'shrub',
-            localX,
-            height: standHeight(0.7, 1.5, rng(), rng()),
-            hue: hueIndex(rng(), HUE_STOPS.shrub),
-          });
-        }
-        return;
-      }
-      plants.push({
-        kind,
-        localX,
-        height: standHeight(min, max, unit(noise, row * 0.008, side * 13 + localX * 0.01), rng()),
-        hue,
-      });
-    };
-
-    if (conifer >= 0.32) {
-      const kind: SceneryKind = conifer > 0.72 ? 'pine' : conifer > 0.5 ? 'broadleaf' : 'cedar';
-      const min = kind === 'pine' ? 9 : kind === 'cedar' ? 10 : 9;
-      const max = kind === 'pine' ? 32 : kind === 'cedar' ? 26 : 22;
-      plantTree(kind, side * (TREE_MIN_M + 16 + conifer * 78 + rng() * 14), min, max, coniferHue);
-      if (conifer > 0.82) {
-        const second: SceneryKind = kind === 'pine' ? 'cedar' : 'pine';
-        plantTree(
-          second,
-          side * (TREE_MIN_M + 36 + rng() * 40),
-          second === 'pine' ? 9 : 10,
-          second === 'pine' ? 32 : 26,
-          coniferHue,
-        );
-      }
-    }
-
-    if (maple > 0.6 && conifer < 0.74 && conifer > 0.36) {
-      plantTree(
-        'maple',
-        side * (TREE_MIN_M + maple * 34 + rng() * 10),
-        8,
-        18,
-        hueIndex(maple, HUE_STOPS.maple),
-      );
-    }
-
-    if (birch > 0.73 && conifer > 0.36 && conifer < 0.68) {
-      plantTree(
-        'birch',
-        side * (TREE_MIN_M + 4 + birch * 26 + rng() * 8),
-        8,
-        16,
-        hueIndex(birch, HUE_STOPS.birch),
-      );
     }
   }
 

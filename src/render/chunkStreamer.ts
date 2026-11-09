@@ -4,6 +4,12 @@ import type { World } from '../world/world.ts';
 import { cumulativeOffsetAt } from './bendMath.ts';
 import { bakeChunk, type BakedChunk } from './chunkBaker.ts';
 import { bakeGrassGeometry, createGrassMaterial, createGrassTuftTexture } from './grassField.ts';
+import {
+  FOREST_KINDS,
+  bakeForestForChunk,
+  createForestMaterials,
+  type ForestKind,
+} from './forestField.ts';
 
 export interface StreamerParams {
   rowsPerChunk: number;
@@ -30,6 +36,8 @@ interface LoadedChunk {
   readonly mesh: THREE.Mesh;
   phiAtStart: number;
   grass: THREE.Mesh | null;
+  forest: THREE.Group | null;
+  forestGeometries: THREE.BufferGeometry[];
 }
 
 export interface StreamerMaterials {
@@ -53,6 +61,7 @@ export class ChunkStreamer {
   private bakeSource: ChunkBakeSource;
   private wireframe = false;
   private readonly grassMaterial: THREE.MeshLambertMaterial;
+  private readonly forestMaterials: Record<ForestKind, THREE.MeshLambertMaterial>;
 
   constructor(
     private world: World,
@@ -62,6 +71,7 @@ export class ChunkStreamer {
   ) {
     this.bakeSource = bakeSource ?? this.defaultBakeSource();
     this.grassMaterial = createGrassMaterial(createGrassTuftTexture());
+    this.forestMaterials = createForestMaterials();
   }
 
   /** Replace the procedural baker with a custom source (for authored chunks). */
@@ -96,6 +106,7 @@ export class ChunkStreamer {
     for (const chunk of this.chunks.values()) {
       chunk.mesh.material = mat;
       if (chunk.grass) chunk.grass.visible = !on;
+      if (chunk.forest) chunk.forest.visible = !on;
     }
   }
 
@@ -236,6 +247,10 @@ export class ChunkStreamer {
     this.invalidate();
     this.grassMaterial.map?.dispose();
     this.grassMaterial.dispose();
+    for (const mat of Object.values(this.forestMaterials)) {
+      mat.map?.dispose();
+      mat.dispose();
+    }
   }
 
   // ---- internals ---------------------------------------------------------
@@ -264,8 +279,17 @@ export class ChunkStreamer {
     mesh.position.set(phiAtStart, 0, -baked.rowStart * this.params.rowSpacing);
     const grass = this.bakeGrass(baked);
     if (grass) mesh.add(grass);
+    const forest = this.bakeForest(baked);
+    if (forest) mesh.add(forest.group);
     this.group.add(mesh);
-    this.chunks.set(baked.chunkIndex, { baked, mesh, phiAtStart, grass });
+    this.chunks.set(baked.chunkIndex, {
+      baked,
+      mesh,
+      phiAtStart,
+      grass,
+      forest: forest?.group ?? null,
+      forestGeometries: forest?.geometries ?? [],
+    });
   }
 
   private bakeGrass(baked: BakedChunk): THREE.Mesh | null {
@@ -283,12 +307,39 @@ export class ChunkStreamer {
     return grass;
   }
 
+  private bakeForest(
+    baked: BakedChunk,
+  ): { group: THREE.Group; geometries: THREE.BufferGeometry[] } | null {
+    const byKind = bakeForestForChunk(this.world, baked, {
+      cols: this.params.cols,
+      rowSpacing: this.params.rowSpacing,
+      roadColSpacing: this.params.roadColSpacing,
+      landscapeColSpacing: this.params.landscapeColSpacing,
+    });
+    const group = new THREE.Group();
+    group.name = 'forest';
+    const geometries: THREE.BufferGeometry[] = [];
+    for (const kind of FOREST_KINDS) {
+      const geometry = byKind[kind];
+      if (!geometry) continue;
+      const mesh = new THREE.Mesh(geometry, this.forestMaterials[kind]);
+      mesh.name = `forest-${kind}`;
+      mesh.frustumCulled = false;
+      group.add(mesh);
+      geometries.push(geometry);
+    }
+    if (geometries.length === 0) return null;
+    group.visible = !this.wireframe;
+    return { group, geometries };
+  }
+
   private disposeChunk(idx: number): void {
     const chunk = this.chunks.get(idx);
     if (!chunk) return;
     this.group.remove(chunk.mesh);
     chunk.baked.geometry.dispose();
     chunk.grass?.geometry.dispose();
+    for (const geometry of chunk.forestGeometries) geometry.dispose();
     this.chunks.delete(idx);
   }
 }
