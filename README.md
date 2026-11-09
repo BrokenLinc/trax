@@ -13,7 +13,7 @@ pnpm dev          # web preview at http://localhost:5173
 pnpm tauri:dev    # desktop window (requires rustup + cargo)
 ```
 
-Controls: `W/↑` forward, `S/↓` reverse, `Shift` boost, `Space` pause, `R`
+Controls: `W/↑` forward, `S/↓` reverse, `Shift` boost, `Esc` pause, `R`
 reseed, `G` wireframe, `V` top-down debug view.
 
 **How the engine fits together** (depth map, bends, mesh, tangent-aligned

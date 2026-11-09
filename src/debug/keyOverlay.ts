@@ -36,7 +36,7 @@ const KEYS: readonly KeySpec[] = [
   { id: 'topdown', cap: 'V', label: 'Top-down view', action: 'onTopdown' },
   { id: 'devOverlays', cap: '`', label: 'Dev overlays', action: 'onDevOverlays' },
   { id: 'reseed', cap: 'R', label: 'Reseed', action: 'onReseed' },
-  { id: 'paused', cap: 'Space', label: 'Pause', wide: true, action: 'onPause' },
+  { id: 'paused', cap: 'Esc', label: 'Pause', action: 'onPause' },
   { id: 'cameraLevel', cap: 'C', label: 'Camera mode', action: 'onCamera' },
   { id: 'headlight', cap: 'H', label: 'Headlight', action: 'onHeadlight' },
 ];
@@ -54,12 +54,15 @@ function ensureStyle(): void {
       bottom: 14px;
       right: 292px;
       z-index: 12;
-      display: flex;
+      display: none;
       flex-wrap: wrap;
       gap: 8px 10px;
       align-items: center;
       pointer-events: none;
       font-family: ui-monospace, 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace;
+    }
+    .mode7-keys.is-paused {
+      display: flex;
     }
     .mode7-key {
       display: inline-flex;
@@ -150,6 +153,7 @@ export class KeyOverlay {
   }
 
   update(model: KeyOverlayModel): void {
+    this.root.classList.toggle('is-paused', model.paused);
     for (const spec of KEYS) {
       const button = this.keys.get(spec.id);
       if (!button || spec.id === 'reseed') continue;

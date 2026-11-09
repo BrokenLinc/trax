@@ -103,6 +103,8 @@ export class PlayerMesh {
     landscapeColSpacing: number,
     speed = 0,
     lateralSpeed = 0,
+    altitude?: number,
+    airborne = false,
   ): void {
     const col = signedColFromWorldX(lateralX, roadColSpacing, landscapeColSpacing);
     const groundY = world.depth.sampleBilinear(distance, col);
@@ -113,8 +115,9 @@ export class PlayerMesh {
     const height = this.params.height;
     this.card.scale.set(height * aspect, height, 1);
     const cruise = Math.min(1, Math.abs(speed) / 10);
-    const bob = Math.sin(distance * 2.1) * 0.018 * cruise;
-    this.card.position.y = height / 2 + bob;
+    const bob = airborne ? 0 : Math.sin(distance * 2.1) * 0.018 * cruise;
+    const lift = altitude === undefined ? 0 : Math.max(0, altitude - groundY);
+    this.card.position.y = height / 2 + bob + lift;
     const lean = THREE.MathUtils.clamp(-lateralSpeed * 0.0035, -0.16, 0.16);
     this.card.rotation.set(0, 0, lean);
   }

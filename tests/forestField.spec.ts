@@ -77,6 +77,15 @@ describe('forest field', () => {
     }
     const pines = ofKind('pine').map((tree) => tree.hue);
     expect(Math.max(...pines) - Math.min(...pines)).toBeGreaterThan(8);
+    expect(Math.min(...pines)).toBeLessThan(-40);
+  });
+
+  it('leans each tree within five degrees', () => {
+    expect(trees.some((tree) => tree.tilt < -1)).toBe(true);
+    expect(trees.some((tree) => tree.tilt > 1)).toBe(true);
+    for (const tree of trees) {
+      expect(Math.abs(tree.tilt)).toBeLessThanOrEqual(5);
+    }
   });
 
   it('keeps heights in the larger ranges', () => {
@@ -92,7 +101,7 @@ describe('forest field', () => {
     expect(material).toBeInstanceOf(THREE.MeshLambertMaterial);
     expect(material.alphaTest).toBeCloseTo(0.58);
     expect(material.toneMapped).toBe(false);
-    expect(material.customProgramCacheKey()).toBe('mode7-forest-hue-v1');
+    expect(material.customProgramCacheKey()).toBe('mode7-forest-hue-v3');
     expect(typeof material.onBeforeCompile).toBe('function');
     material.map?.dispose();
     material.dispose();

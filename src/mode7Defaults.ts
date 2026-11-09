@@ -89,7 +89,7 @@ export const MODE7_DEFAULTS: {
   player: {
     strafeSpeedFactor: 0.24,
     strafeAccel: 220,
-    driftFactor: 4,
+    driftFactor: 10,
   },
 };
 

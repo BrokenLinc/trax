@@ -32,14 +32,21 @@ export const FOREST_HEIGHT: Record<ForestKind, { min: number; max: number }> = {
   birch: { min: 12, max: 24 },
 };
 
-/** Degrees from the painted sprite. Maples run green through gold to red. */
+/**
+ * Degrees from the painted sprite, warm direction only. 0 keeps the painted
+ * green. Negative runs through yellow and gold into orange, red, and brown.
+ * Bark is not shifted by this; the shader leaves browns and whites alone.
+ */
 export const FOREST_HUE: Record<ForestKind, { min: number; max: number }> = {
-  pine: { min: -18, max: 18 },
-  broadleaf: { min: -18, max: 18 },
-  cedar: { min: -18, max: 18 },
-  maple: { min: -110, max: 15 },
-  birch: { min: -10, max: 10 },
+  pine: { min: -105, max: 0 },
+  broadleaf: { min: -115, max: 0 },
+  cedar: { min: -90, max: 0 },
+  maple: { min: -130, max: 0 },
+  birch: { min: -75, max: 0 },
 };
+
+/** Lean either way, in degrees. The base stays planted. */
+export const FOREST_TILT_DEG = 5;
 
 const ASPECT: Record<ForestKind, number> = {
   pine: 49 / 112,
@@ -74,10 +81,12 @@ export interface ForestTree {
   height: number;
   width: number;
   flip: boolean;
-  /** Hue rotation in degrees, unique to this tree. */
+  /** Foliage hue rotation in degrees, unique to this tree. */
   hue: number;
   /** Brightness multiply, kept near 1 so it does not repaint the hue. */
   shade: number;
+  /** Degrees of lean about the trunk base, within ±FOREST_TILT_DEG. */
+  tilt: number;
 }
 
 export interface ForestGround {
@@ -125,6 +134,7 @@ export function forestPlacements(opts: {
         const hueSpan = FOREST_HUE[kind];
         const hueT = hash(iz, side * 17 + Math.round(localX * 3), salt + 8);
         const shadeT = hash(iz, side * 19 + Math.round(treeRow), salt + 9);
+        const tiltT = hash(iz, side * 23 + Math.round(localX), salt + 11);
         out.push({
           kind,
           localX,
@@ -134,6 +144,7 @@ export function forestPlacements(opts: {
           flip: hash(iz, side, salt + 5) < 0.5,
           hue: hueSpan.min + hueT * (hueSpan.max - hueSpan.min),
           shade: 0.88 + shadeT * 0.24,
+          tilt: (tiltT - 0.5) * 2 * FOREST_TILT_DEG,
         });
       }
     }
@@ -204,7 +215,11 @@ export function createForestMaterials(): Record<ForestKind, THREE.MeshLambertMat
   return materials;
 }
 
-/** Lambert cutout whose sampled color is hue-rotated per tree. */
+/**
+ * Lambert cutout. Foliage takes this tree's hue. Brown and white bark stay
+ * as painted. Dark green bark, which the pine sprite is drawn with, is
+ * pulled toward brown instead of riding along with the leaves.
+ */
 export function createForestMaterial(map: THREE.Texture): THREE.MeshLambertMaterial {
   const material = new THREE.MeshLambertMaterial({
     map,
@@ -213,7 +228,7 @@ export function createForestMaterial(map: THREE.Texture): THREE.MeshLambertMater
     toneMapped: false,
     depthWrite: true,
   });
-  material.customProgramCacheKey = () => 'mode7-forest-hue-v1';
+  material.customProgramCacheKey = () => 'mode7-forest-hue-v3';
   material.onBeforeCompile = (shader) => {
     shader.vertexShader = mustReplace(
       shader.vertexShader,
@@ -238,16 +253,27 @@ vTreeShade = treeShade;`,
 varying float vTreeHue;
 varying float vTreeShade;
 
-vec3 forestHue(vec3 color, float deg) {
+vec3 hueRotate(vec3 color, float deg) {
   float angle = radians(deg);
   float c = cos(angle);
   float s = sin(angle);
+  // mat3() is column-major, so this is the CSS hue-rotate matrix transposed.
   mat3 m = mat3(
-    0.213 + c * 0.787 - s * 0.213, 0.715 - c * 0.715 - s * 0.715, 0.072 - c * 0.072 + s * 0.928,
-    0.213 - c * 0.213 + s * 0.143, 0.715 + c * 0.285 + s * 0.140, 0.072 - c * 0.072 - s * 0.283,
-    0.213 - c * 0.213 - s * 0.787, 0.715 - c * 0.715 + s * 0.715, 0.072 + c * 0.928 + s * 0.072
+    0.213 + c * 0.787 - s * 0.213, 0.213 - c * 0.213 + s * 0.143, 0.213 - c * 0.213 - s * 0.787,
+    0.715 - c * 0.715 - s * 0.715, 0.715 + c * 0.285 + s * 0.140, 0.715 - c * 0.715 + s * 0.715,
+    0.072 - c * 0.072 + s * 0.928, 0.072 - c * 0.072 - s * 0.283, 0.072 + c * 0.928 + s * 0.072
   );
   return clamp(m * color, 0.0, 1.0);
+}
+
+vec3 forestHue(vec3 color, float deg) {
+  float greenLead = color.g - max(color.r, color.b);
+  if (greenLead <= 0.0) return color;
+  float maxc = max(color.r, max(color.g, color.b));
+  // Pine trunks are a dark green. Leaves are brighter, so only the dark end
+  // is forced toward brown.
+  float trunk = 1.0 - smoothstep(0.015, 0.08, maxc);
+  return hueRotate(color, mix(deg, -95.0, trunk));
 }`,
     );
     shader.fragmentShader = mustReplace(
@@ -285,11 +311,17 @@ function bakeKind(
     const hw = tree.width * 0.5;
     const left = tree.flip ? hw : -hw;
     const right = tree.flip ? -hw : hw;
+    const tilt = (tree.tilt * Math.PI) / 180;
+    const c = Math.cos(tilt);
+    const s = Math.sin(tilt);
     const base = i * 12;
-    writeCorner(positions, base, x + left, y - sink, z);
-    writeCorner(positions, base + 3, x + right, y - sink, z);
-    writeCorner(positions, base + 6, x + right, y - sink + tree.height, z);
-    writeCorner(positions, base + 9, x + left, y - sink + tree.height, z);
+    const place = (dx: number, dy: number, offset: number): void => {
+      writeCorner(positions, offset, x + dx * c - dy * s, y + dx * s + dy * c, z);
+    };
+    place(left, -sink, base);
+    place(right, -sink, base + 3);
+    place(right, tree.height - sink, base + 6);
+    place(left, tree.height - sink, base + 9);
     const uv = i * 8;
     uvs[uv] = 0;
     uvs[uv + 1] = 0;

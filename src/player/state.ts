@@ -14,8 +14,14 @@ export interface PlayerState {
   lateralX: number;
   /** Metres/sec right of centreline; integrated into lateralX each frame. */
   lateralSpeed: number;
-  /** Derived each frame; cached for HUD/inspector consumers. */
+  /** Bike altitude in metres. The road while planted, above it in the air. */
   y: number;
+  /** Metres/sec, up positive. The road pushes this; gravity pulls it down. */
+  vy: number;
+  /** True from a crest launch until the wheels meet the road. */
+  airborne: boolean;
+  /** Road height last step. Null after a teleport, until the next sample. */
+  prevGroundY: number | null;
 }
 
 export function createPlayerState(initial: Partial<PlayerState> = {}): PlayerState {
@@ -25,5 +31,8 @@ export function createPlayerState(initial: Partial<PlayerState> = {}): PlayerSta
     lateralX: initial.lateralX ?? 0,
     lateralSpeed: initial.lateralSpeed ?? 0,
     y: initial.y ?? 0,
+    vy: initial.vy ?? 0,
+    airborne: initial.airborne ?? false,
+    prevGroundY: initial.prevGroundY ?? null,
   };
 }

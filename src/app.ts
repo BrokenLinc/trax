@@ -21,6 +21,7 @@ import { WaterPlane } from './render/waterPlane.ts';
 import { DebugDraw } from './render/debugDraw.ts';
 import { meshLateralBounds, signedColFromWorldX } from './render/meshLattice.ts';
 import { PlayerController } from './player/controller.ts';
+import { stepFlight } from './player/flight.ts';
 import { createPlayerState, type PlayerState } from './player/state.ts';
 import { Hud } from './debug/hud.ts';
 import { KeyOverlay } from './debug/keyOverlay.ts';
@@ -253,6 +254,7 @@ export class App {
 
   setPaused(p: boolean): void {
     this.paused = p;
+    this.refreshOverlays();
   }
 
   setHeadless(h: boolean): void {
@@ -272,6 +274,7 @@ export class App {
 
   setDistance(distance: number): void {
     this.player.distance = distance;
+    this.player.prevGroundY = null;
     this.simulate(0);
     this.render();
   }
@@ -508,14 +511,22 @@ export class App {
     const bounds = meshLateralBounds(tp.cols, tp.roadColSpacing, tp.landscapeColSpacing);
     if (dt > 0) {
       const bendSlopeChange = tangentSlopeChangeAtRow(this.player.distance, this.world.bend);
-      this.controller.update(this.player, dt, bounds, tp.rowSpacing, bendSlopeChange);
+      this.controller.update(
+        this.player,
+        dt,
+        bounds,
+        tp.rowSpacing,
+        bendSlopeChange,
+        this.player.airborne,
+      );
     }
     const depthCol = signedColFromWorldX(
       this.player.lateralX,
       tp.roadColSpacing,
       tp.landscapeColSpacing,
     );
-    this.player.y = this.world.depth.sampleBilinear(this.player.distance, depthCol);
+    const groundY = this.world.depth.sampleBilinear(this.player.distance, depthCol);
+    stepFlight(this.player, groundY, dt);
     this.terrain.update(this.player.distance, this.player.lateralX);
     this.sprites.update(this.player.distance);
     this.playerMesh.update(
@@ -526,6 +537,8 @@ export class App {
       tp.landscapeColSpacing,
       this.player.speed,
       this.player.lateralSpeed,
+      this.player.y,
+      this.player.airborne,
     );
     this.debugDraw.updateCentreLine(
       this.terrain.snapshot().offsets,
@@ -667,9 +680,10 @@ export class App {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) {
         return;
       }
-      if (e.code === 'Space' && target.closest('.mode7-keys')) e.preventDefault();
+      if (e.code === 'Escape' && target.closest('.mode7-keys')) e.preventDefault();
     }
-    if (e.code === 'Space') {
+    if (e.code === 'Escape') {
+      e.preventDefault();
       this.setPaused(!this.paused);
     } else if (e.code === 'KeyR') {
       this.reseed();

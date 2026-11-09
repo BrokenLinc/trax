@@ -78,38 +78,51 @@ export class PlayerController {
     this.params = params;
   }
 
-  /** Step the player by `dt` seconds. */
+  /**
+   * Step the player by `dt` seconds. `locked` while the bike is off the road:
+   * throttle, brake, boost, and bend drift do nothing, and the speed already
+   * on the bike keeps coasting. Left and right still steer, at half strength.
+   */
   update(
     player: PlayerState,
     dt: number,
     lateralBounds: MeshLateralBounds,
     rowSpacing: number,
     bendSlopeChange: number,
+    locked = false,
   ): void {
     const p = this.params;
-    let accel = 0;
-    if (this.forward) accel += p.accel * (this.boost ? 1.6 : 1);
-    if (this.reverse) accel -= p.decel;
-    if (!this.forward && !this.reverse) {
-      const drag = Math.min(Math.abs(player.speed), p.friction * dt);
-      player.speed -= Math.sign(player.speed) * drag;
-    } else {
-      player.speed += accel * dt;
+    if (!locked) {
+      let accel = 0;
+      if (this.forward) accel += p.accel * (this.boost ? 1.6 : 1);
+      if (this.reverse) accel -= p.decel;
+      if (!this.forward && !this.reverse) {
+        const drag = Math.min(Math.abs(player.speed), p.friction * dt);
+        player.speed -= Math.sign(player.speed) * drag;
+      } else {
+        player.speed += accel * dt;
+      }
+      if (player.speed > p.maxSpeed) player.speed = p.maxSpeed;
+      if (player.speed < -p.maxSpeed) player.speed = -p.maxSpeed;
     }
-    if (player.speed > p.maxSpeed) player.speed = p.maxSpeed;
-    if (player.speed < -p.maxSpeed) player.speed = -p.maxSpeed;
     const dRows = player.speed * dt;
     player.distance += dRows;
 
-    if (p.driftFactor !== 0 && dRows !== 0) {
+    if (!locked && p.driftFactor !== 0 && dRows !== 0) {
       player.lateralX += -dRows * bendSlopeChange * p.driftFactor;
     }
 
+    const strafeScale = locked ? 0.5 : 1;
     const strafeDir = (this.strafeRight ? 1 : 0) + (this.strafeLeft ? -1 : 0);
     const maxStrafe =
-      player.speed !== 0 ? p.strafeSpeedFactor * Math.abs(player.speed) * rowSpacing : 0;
+      (player.speed !== 0 ? p.strafeSpeedFactor * Math.abs(player.speed) * rowSpacing : 0) *
+      strafeScale;
     const targetLateralSpeed = strafeDir !== 0 && maxStrafe > 0 ? strafeDir * maxStrafe : 0;
-    player.lateralSpeed = moveToward(player.lateralSpeed, targetLateralSpeed, p.strafeAccel * dt);
+    player.lateralSpeed = moveToward(
+      player.lateralSpeed,
+      targetLateralSpeed,
+      p.strafeAccel * strafeScale * dt,
+    );
     if (maxStrafe > 0) {
       player.lateralSpeed = clamp(player.lateralSpeed, -maxStrafe, maxStrafe);
     } else {
