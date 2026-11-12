@@ -12,6 +12,9 @@ export interface HudModel {
   rowFloor: number;
   rowFrac: number;
   bendAtPlayer: number;
+  /** 1-based gear from the engine gearbox. */
+  gear: number;
+  rpm: number;
   paused: boolean;
   headless: boolean;
 }
@@ -53,6 +56,8 @@ export class Hud {
       `player Y   ${m.playerY.toFixed(3)}`,
       `row        ${m.rowFloor} + ${m.rowFrac.toFixed(3)}`,
       `bend@row   ${m.bendAtPlayer.toFixed(3)}`,
+      `gear       ${m.gear}`,
+      `rpm        ${m.rpm.toFixed(0)}`,
     ].join('\n');
   }
 

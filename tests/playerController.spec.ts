@@ -7,6 +7,7 @@ const baseParams = {
   decel: 1,
   friction: 0,
   maxSpeed: 10,
+  boostFactor: 1,
   strafeSpeedFactor: 1,
   strafeAccel: 1e6,
   driftFactor: 0,

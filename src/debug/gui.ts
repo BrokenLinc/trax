@@ -39,18 +39,18 @@ export function buildGui(opts: {
 
   const player = gui.addFolder('player');
   const playerParams = opts.controller.getParams();
+  const syncPlayer = (): void => opts.controller.setParams(playerParams);
+  player.add(playerParams, 'accel', 0, 40, 0.5).name('accel').onChange(syncPlayer);
+  player.add(playerParams, 'decel', 0, 50, 0.5).name('brake').onChange(syncPlayer);
+  player.add(playerParams, 'friction', 0, 40, 0.5).name('friction').onChange(syncPlayer);
+  player.add(playerParams, 'maxSpeed', 1, 80, 0.5).name('top speed').onChange(syncPlayer);
+  player.add(playerParams, 'boostFactor', 1, 4, 0.05).name('boost').onChange(syncPlayer);
   player
     .add(playerParams, 'strafeSpeedFactor', 0.05, 1.5, 0.01)
     .name('strafe speed factor')
-    .onChange(() => opts.controller.setParams(playerParams));
-  player
-    .add(playerParams, 'strafeAccel', 5, 120, 1)
-    .name('strafe accel')
-    .onChange(() => opts.controller.setParams(playerParams));
-  player
-    .add(playerParams, 'driftFactor', 0, 25, 0.05)
-    .name('drift factor')
-    .onChange(() => opts.controller.setParams(playerParams));
+    .onChange(syncPlayer);
+  player.add(playerParams, 'strafeAccel', 5, 400, 1).name('strafe accel').onChange(syncPlayer);
+  player.add(playerParams, 'driftFactor', 0, 25, 0.05).name('drift factor').onChange(syncPlayer);
   player.add(opts.flight, 'enabled').name('gravity');
 
   const visuals = gui.addFolder('visuals');
@@ -170,11 +170,7 @@ export function buildGui(opts: {
           landscapeColSpacing: terrainParams.landscapeColSpacing,
         },
         water: { y: opts.water.getParams().y },
-        player: {
-          strafeSpeedFactor: opts.controller.getParams().strafeSpeedFactor,
-          strafeAccel: opts.controller.getParams().strafeAccel,
-          driftFactor: opts.controller.getParams().driftFactor,
-        },
+        player: { ...opts.controller.getParams() },
         flight: { ...opts.flight },
       });
       const copy = async (): Promise<void> => {

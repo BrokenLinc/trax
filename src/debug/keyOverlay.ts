@@ -11,6 +11,7 @@ export interface KeyOverlayModel {
   /** True when the chase camera faces straight down −Z. */
   cameraLevel: boolean;
   headlight: boolean;
+  engine: boolean;
 }
 
 export interface KeyOverlayActions {
@@ -21,6 +22,7 @@ export interface KeyOverlayActions {
   onPause: () => void;
   onCamera: () => void;
   onHeadlight: () => void;
+  onEngine: () => void;
 }
 
 interface KeySpec {
@@ -39,6 +41,7 @@ const KEYS: readonly KeySpec[] = [
   { id: 'paused', cap: 'Esc', label: 'Pause', action: 'onPause' },
   { id: 'cameraLevel', cap: 'C', label: 'Camera mode', action: 'onCamera' },
   { id: 'headlight', cap: 'H', label: 'Headlight', action: 'onHeadlight' },
+  { id: 'engine', cap: 'M', label: 'Engine', action: 'onEngine' },
 ];
 
 const STYLE_ID = 'mode7-key-overlay-style';

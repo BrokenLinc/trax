@@ -11,6 +11,8 @@ export interface ControllerParams {
   friction: number;
   /** Speed cap in either direction (rows/sec). */
   maxSpeed: number;
+  /** Multiplier on forward accel while Shift is held. */
+  boostFactor: number;
   /**
    * Max strafe speed as a fraction of forward world speed (|speed| × rowSpacing).
    * No strafe when |speed| is zero.
@@ -25,15 +27,7 @@ export interface ControllerParams {
   driftFactor: number;
 }
 
-export const DEFAULT_CONTROLLER: ControllerParams = {
-  accel: 18,
-  decel: 22,
-  friction: 6,
-  maxSpeed: 30,
-  strafeSpeedFactor: MODE7_DEFAULTS.player.strafeSpeedFactor,
-  strafeAccel: MODE7_DEFAULTS.player.strafeAccel,
-  driftFactor: MODE7_DEFAULTS.player.driftFactor,
-};
+export const DEFAULT_CONTROLLER: ControllerParams = { ...MODE7_DEFAULTS.player };
 
 /**
  * Listens to keyboard input and advances `player.distance` over time.
@@ -95,7 +89,7 @@ export class PlayerController {
     const p = this.params;
     if (!locked) {
       let accel = 0;
-      if (this.forward) accel += p.accel * (this.boost ? 1.6 : 1);
+      if (this.forward) accel += p.accel * (this.boost ? p.boostFactor : 1);
       if (this.reverse) accel -= p.decel;
       if (!this.forward && !this.reverse) {
         const drag = Math.min(Math.abs(player.speed), p.friction * dt);

@@ -15,6 +15,16 @@ export interface TerrainMeshSpacingParams {
 
 /** Player movement knobs exposed in the debug UI. */
 export interface PlayerParams {
+  /** Acceleration when forward is held (rows/sec²). */
+  accel: number;
+  /** Acceleration when reverse is held (rows/sec²), positive value. */
+  decel: number;
+  /** Passive friction toward zero speed (rows/sec², applied as drag). */
+  friction: number;
+  /** Speed cap in either direction (rows/sec). */
+  maxSpeed: number;
+  /** Multiplier on forward accel while Shift is held. */
+  boostFactor: number;
   /**
    * Max strafe speed as a fraction of forward world speed (|speed| × rowSpacing).
    * No strafe when |speed| is zero.
@@ -89,6 +99,11 @@ export const MODE7_DEFAULTS: {
     y: -147.5,
   },
   player: {
+    accel: 18,
+    decel: 22,
+    friction: 6,
+    maxSpeed: 30,
+    boostFactor: 1.6,
     strafeSpeedFactor: 0.24,
     strafeAccel: 220,
     driftFactor: 14,
@@ -189,6 +204,11 @@ function formatWaterInner(p: WaterParams): string {
 
 function formatPlayerInner(p: PlayerParams): string {
   return [
+    `    accel: ${numLiteral(p.accel)},`,
+    `    decel: ${numLiteral(p.decel)},`,
+    `    friction: ${numLiteral(p.friction)},`,
+    `    maxSpeed: ${numLiteral(p.maxSpeed)},`,
+    `    boostFactor: ${numLiteral(p.boostFactor)},`,
     `    strafeSpeedFactor: ${numLiteral(p.strafeSpeedFactor)},`,
     `    strafeAccel: ${numLiteral(p.strafeAccel)},`,
     `    driftFactor: ${numLiteral(p.driftFactor)},`,

@@ -117,6 +117,7 @@ describe('PlayerController airborne lock', () => {
       decel: 20,
       friction: 10,
       maxSpeed: 30,
+      boostFactor: 1.6,
       strafeSpeedFactor: 1,
       strafeAccel: 100,
       driftFactor,

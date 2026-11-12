@@ -23,6 +23,8 @@ import { meshLateralBounds, signedColFromWorldX } from './render/meshLattice.ts'
 import { PlayerController } from './player/controller.ts';
 import { DEFAULT_FLIGHT, stepFlight, type FlightParams } from './player/flight.ts';
 import { createPlayerState, type PlayerState } from './player/state.ts';
+import { createEngineState, stepEngine, type EngineState } from './audio/engine.ts';
+import { EngineSynth } from './audio/engineSynth.ts';
 import { Hud } from './debug/hud.ts';
 import { KeyOverlay } from './debug/keyOverlay.ts';
 import { buildGui } from './debug/gui.ts';
@@ -97,6 +99,9 @@ export class App {
   private paused = false;
   private devOverlays = false;
   private headlightOn = false;
+  private engineOn = false;
+  private readonly engine: EngineState = createEngineState();
+  private readonly engineSynth: EngineSynth | null;
   private readonly day = { timeOfDay: NOON, dayLength: DEFAULT_DAY_LENGTH_SECONDS };
   private headless: boolean;
   /** Filled inside `render()` from `gl.VIEWPORT` after each pass boundary. */
@@ -160,6 +165,7 @@ export class App {
     this.controller = new PlayerController();
     this.flightParams = { ...DEFAULT_FLIGHT };
     this.controller.headless = opts.headless;
+    this.engineSynth = opts.headless ? null : new EngineSynth();
 
     this.hud = opts.headless ? null : new Hud(this.container);
     this.keys = opts.headless
@@ -172,6 +178,7 @@ export class App {
           onPause: () => this.setPaused(!this.paused),
           onCamera: () => this.toggleCameraMode(),
           onHeadlight: () => this.toggleHeadlight(),
+          onEngine: () => this.toggleEngine(),
         });
     // Always create the top-down: it's useful in headless screenshots too.
     // Pass a parent only when we actually have a visible DOM container.
@@ -246,6 +253,7 @@ export class App {
     window.removeEventListener('resize', this.handleResize);
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
+    this.engineSynth?.dispose();
     this.hud?.destroy();
     this.keys?.destroy();
     this.gui?.destroy();
@@ -335,11 +343,7 @@ export class App {
         landscapeColSpacing: terrain.landscapeColSpacing,
       },
       water: { y: this.water.getParams().y },
-      player: {
-        strafeSpeedFactor: this.controller.getParams().strafeSpeedFactor,
-        strafeAccel: this.controller.getParams().strafeAccel,
-        driftFactor: this.controller.getParams().driftFactor,
-      },
+      player: { ...this.controller.getParams() },
       flight: { ...this.flightParams },
     };
   }
@@ -568,6 +572,17 @@ export class App {
     if (dt > 0) {
       this.day.timeOfDay = wrapDayTime(this.day.timeOfDay + dt / Math.max(1, this.day.dayLength));
     }
+    if (dt > 0) {
+      stepEngine(
+        this.engine,
+        {
+          speed: this.player.speed,
+          throttle: this.controller.forward || this.controller.boost,
+        },
+        dt,
+      );
+    }
+    if (this.engineOn) this.engineSynth?.setRpm(this.engine.rpm);
     const day = sampleDayNight(this.day.timeOfDay);
     this.applyDay(day);
     this.sky.update(this.camera.camera.position.y, this.roadSwing(), day);
@@ -589,6 +604,8 @@ export class App {
         rowFloor: lo,
         rowFrac: this.player.distance - lo,
         bendAtPlayer: this.world.bend.sample(lo),
+        gear: this.engine.gear + 1,
+        rpm: this.engine.rpm,
         paused: this.paused,
         headless: this.headless,
       });
@@ -600,6 +617,7 @@ export class App {
       paused: this.paused,
       cameraLevel: this.camera.getMode() === 'level',
       headlight: this.headlightOn,
+      engine: this.engineOn,
     });
   }
 
@@ -707,6 +725,8 @@ export class App {
       this.toggleCameraMode();
     } else if (e.code === 'KeyH') {
       this.toggleHeadlight();
+    } else if (e.code === 'KeyM') {
+      this.toggleEngine();
     } else if (e.code === 'Backquote') {
       this.setDevOverlays(!this.devOverlays);
     }
@@ -740,6 +760,14 @@ export class App {
   private toggleHeadlight(): void {
     this.headlightOn = !this.headlightOn;
     this.applyDay(sampleDayNight(this.day.timeOfDay));
+    this.refreshOverlays();
+  }
+
+  private toggleEngine(): void {
+    this.engineOn = !this.engineOn;
+    if (!this.engineSynth) return;
+    if (this.engineOn) this.engineSynth.setRpm(this.engine.rpm);
+    this.engineSynth.setEnabled(this.engineOn);
     this.refreshOverlays();
   }
 
