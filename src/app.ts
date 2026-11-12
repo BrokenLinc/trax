@@ -21,7 +21,7 @@ import { WaterPlane } from './render/waterPlane.ts';
 import { DebugDraw } from './render/debugDraw.ts';
 import { meshLateralBounds, signedColFromWorldX } from './render/meshLattice.ts';
 import { PlayerController } from './player/controller.ts';
-import { stepFlight } from './player/flight.ts';
+import { DEFAULT_FLIGHT, stepFlight, type FlightParams } from './player/flight.ts';
 import { createPlayerState, type PlayerState } from './player/state.ts';
 import { Hud } from './debug/hud.ts';
 import { KeyOverlay } from './debug/keyOverlay.ts';
@@ -70,6 +70,7 @@ export class App {
   private readonly sun: THREE.DirectionalLight;
   private readonly moonLight: THREE.DirectionalLight;
   private readonly headlight: THREE.SpotLight;
+  private readonly tailLight: THREE.SpotLight;
   private readonly sceneFog: SceneFog;
   private readonly terrain: TerrainMesh;
   private readonly playerMesh: PlayerMesh;
@@ -78,6 +79,7 @@ export class App {
   private readonly water: WaterPlane;
   private readonly debugDraw: DebugDraw;
   private readonly controller: PlayerController;
+  private readonly flightParams: FlightParams;
   private readonly player: PlayerState;
   private readonly hud: Hud | null;
   private readonly keys: KeyOverlay | null;
@@ -122,10 +124,15 @@ export class App {
     this.sun = rig.sun;
     this.moonLight = rig.moon;
     this.sceneFog = new SceneFog(this.scene);
-    this.headlight = new THREE.SpotLight(0xfff1d4, 0, 78, 0.55, 0.92, 0.22);
+    this.headlight = new THREE.SpotLight(0xfff1d4, 0, 156, 0.55, 0.92, 0.22);
     this.headlight.castShadow = false;
     this.scene.add(this.headlight);
     this.scene.add(this.headlight.target);
+    // Wide soft cone. Decay matches the headlight so the lower intensity stays local.
+    this.tailLight = new THREE.SpotLight(0xff2210, 0, 18, 1.5, 0.84, 0.22);
+    this.tailLight.castShadow = false;
+    this.scene.add(this.tailLight);
+    this.scene.add(this.tailLight.target);
 
     this.world = new World(opts.seed);
     this.water = new WaterPlane();
@@ -151,6 +158,7 @@ export class App {
 
     this.player = createPlayerState({ distance: opts.initialDistance });
     this.controller = new PlayerController();
+    this.flightParams = { ...DEFAULT_FLIGHT };
     this.controller.headless = opts.headless;
 
     this.hud = opts.headless ? null : new Hud(this.container);
@@ -172,6 +180,7 @@ export class App {
       ? null
       : buildGui({
           controller: this.controller,
+          flight: this.flightParams,
           world: this.world,
           chaseCamera: this.camera,
           sceneFog: this.sceneFog,
@@ -331,6 +340,7 @@ export class App {
         strafeAccel: this.controller.getParams().strafeAccel,
         driftFactor: this.controller.getParams().driftFactor,
       },
+      flight: { ...this.flightParams },
     };
   }
 
@@ -526,7 +536,7 @@ export class App {
       tp.landscapeColSpacing,
     );
     const groundY = this.world.depth.sampleBilinear(this.player.distance, depthCol);
-    stepFlight(this.player, groundY, dt);
+    stepFlight(this.player, groundY, dt, this.flightParams);
     this.terrain.update(this.player.distance, this.player.lateralX);
     this.sprites.update(this.player.distance);
     this.playerMesh.update(
@@ -747,12 +757,20 @@ export class App {
     );
     this.moonLight.intensity = day.moonLight.intensity;
     this.moonLight.position.set(day.moonLight.x, day.moonLight.y, day.moonLight.z);
-    this.headlight.intensity = this.headlightOn ? 70 : 0;
+    this.headlight.intensity = this.headlightOn ? 52.5 : 0;
     this.headlight.visible = this.headlightOn;
+    this.tailLight.intensity = this.headlightOn ? 16 : 0;
+    this.tailLight.visible = this.headlightOn;
+    this.playerMesh.setTailLight(this.headlightOn);
     const y = this.player.y;
     // Ahead of the rider, aimed down the lane, so the cone is a corridor not a puddle.
     this.headlight.position.set(0, y + 1.15, -1.6);
     this.headlight.target.position.set(0, y + 0.2, -46);
+    // Mostly down, biased behind the tire. A level beam faces the camera and
+    // misses the frame; this still points backward and lays a wide pool on
+    // the lane around the rear wheel.
+    this.tailLight.position.set(0, y + 0.8, 0.08);
+    this.tailLight.target.position.set(0, y - 2.8, 0.55);
   }
 
   private reseed(): void {

@@ -1,3 +1,4 @@
+import type { FlightParams } from './player/flight.ts';
 import type { ChaseCameraParams } from './render/camera.ts';
 import type { SceneFogParams } from './render/scene.ts';
 import type { WaterParams } from './render/waterPlane.ts';
@@ -41,6 +42,7 @@ export const MODE7_DEFAULTS: {
   terrain: TerrainMeshSpacingParams;
   water: WaterParams;
   player: PlayerParams;
+  flight: FlightParams;
 } = {
   depth: {
     // Rolling forested hills: a few hundred metres between crests, tens of
@@ -89,7 +91,12 @@ export const MODE7_DEFAULTS: {
   player: {
     strafeSpeedFactor: 0.24,
     strafeAccel: 220,
-    driftFactor: 10,
+    driftFactor: 14,
+  },
+  flight: {
+    // Off: the bike stays on the road. On: crests launch and gravity pulls down.
+    enabled: false,
+    gravity: 66,
   },
 };
 
@@ -107,11 +114,16 @@ export type Mode7DefaultsSnapshot = {
   terrain: TerrainMeshSpacingParams;
   water: WaterParams;
   player: PlayerParams;
+  flight: FlightParams;
 };
 
 function numLiteral(n: number): string {
   if (Number.isInteger(n)) return String(n);
   return String(n);
+}
+
+function boolLiteral(v: boolean): string {
+  return v ? 'true' : 'false';
 }
 
 function hexLiteral(n: number): string {
@@ -183,6 +195,14 @@ function formatPlayerInner(p: PlayerParams): string {
   ].join('\n');
 }
 
+function formatFlightInner(p: FlightParams): string {
+  return [
+    `    // Off: the bike stays on the road. On: crests launch and gravity pulls down.`,
+    `    enabled: ${boolLiteral(p.enabled)},`,
+    `    gravity: ${numLiteral(p.gravity)},`,
+  ].join('\n');
+}
+
 function formatDefaultsExportsBlock(live: Mode7DefaultsSnapshot): string {
   const body = [
     `  depth: {`,
@@ -206,6 +226,9 @@ function formatDefaultsExportsBlock(live: Mode7DefaultsSnapshot): string {
     `  player: {`,
     formatPlayerInner(live.player),
     `  },`,
+    `  flight: {`,
+    formatFlightInner(live.flight),
+    `  },`,
   ].join('\n');
 
   return [
@@ -221,6 +244,7 @@ function formatDefaultsExportsBlock(live: Mode7DefaultsSnapshot): string {
     `  terrain: TerrainMeshSpacingParams;`,
     `  water: WaterParams;`,
     `  player: PlayerParams;`,
+    `  flight: FlightParams;`,
     `} = {`,
     body,
     `};`,

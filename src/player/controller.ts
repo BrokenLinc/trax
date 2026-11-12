@@ -80,8 +80,9 @@ export class PlayerController {
 
   /**
    * Step the player by `dt` seconds. `locked` while the bike is off the road:
-   * throttle, brake, boost, and bend drift do nothing, and the speed already
-   * on the bike keeps coasting. Left and right still steer, at half strength.
+   * throttle, brake, and boost do nothing, and the speed already on the bike
+   * keeps coasting. Bend drift still applies at full strength. Left and right
+   * still steer, at half strength.
    */
   update(
     player: PlayerState,
@@ -108,7 +109,7 @@ export class PlayerController {
     const dRows = player.speed * dt;
     player.distance += dRows;
 
-    if (!locked && p.driftFactor !== 0 && dRows !== 0) {
+    if (p.driftFactor !== 0 && dRows !== 0) {
       player.lateralX += -dRows * bendSlopeChange * p.driftFactor;
     }
 

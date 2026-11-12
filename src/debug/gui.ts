@@ -8,6 +8,7 @@ import type { WaterPlane } from '../render/waterPlane.ts';
 import type { World } from '../world/world.ts';
 import type { DebugDraw } from '../render/debugDraw.ts';
 import type { PlayerController } from '../player/controller.ts';
+import type { FlightParams } from '../player/flight.ts';
 import type { SkyRig } from '../render/skyRig.ts';
 import type { TopDownView } from './topdownView.ts';
 
@@ -18,6 +19,7 @@ import type { TopDownView } from './topdownView.ts';
  */
 export function buildGui(opts: {
   controller: PlayerController;
+  flight: FlightParams;
   world: World;
   chaseCamera: ChaseCamera;
   sceneFog: SceneFog;
@@ -49,6 +51,7 @@ export function buildGui(opts: {
     .add(playerParams, 'driftFactor', 0, 25, 0.05)
     .name('drift factor')
     .onChange(() => opts.controller.setParams(playerParams));
+  player.add(opts.flight, 'enabled').name('gravity');
 
   const visuals = gui.addFolder('visuals');
   const visState = {
@@ -172,6 +175,7 @@ export function buildGui(opts: {
           strafeAccel: opts.controller.getParams().strafeAccel,
           driftFactor: opts.controller.getParams().driftFactor,
         },
+        flight: { ...opts.flight },
       });
       const copy = async (): Promise<void> => {
         try {
